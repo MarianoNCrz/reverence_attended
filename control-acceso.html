@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Control Fiesta">
+<title>Control de Acceso — Fiesta</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 1rem; color: #111; }
+  .container { max-width: 440px; margin: 0 auto; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .sync-row { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
+  .dot.ok { background: #3a7d44; animation: pulse 2s infinite; }
+  .dot.err { background: #c0392b; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  .sync-lbl { font-size: 12px; color: #888; }
+  .tabs { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 1.25rem; }
+  .tab { padding: 8px 16px; font-size: 14px; cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; color: #888; }
+  .tab.active { color: #111; border-bottom: 2px solid #111; font-weight: 500; }
+  .panel { display: none; } .panel.active { display: block; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 1.25rem; }
+  .stat { background: #fff; border: 1px solid #eee; border-radius: 10px; padding: 12px; text-align: center; }
+  .stat-n { font-size: 26px; font-weight: 600; }
+  .stat-l { font-size: 11px; color: #888; margin-top: 2px; }
+  #scanner-box { background: #eee; border-radius: 12px; height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; margin-bottom: 1rem; position: relative; overflow: hidden; }
+  #video { width: 100%; height: 100%; object-fit: cover; display: none; border-radius: 12px; }
+  #scan-frame { position: absolute; width: 150px; height: 150px; border: 2px solid #0066cc; border-radius: 8px; display: none; pointer-events: none; }
+  #scan-line { position: absolute; width: 130px; height: 2px; background: #0066cc; opacity: .7; display: none; animation: scanline 1.8s ease-in-out infinite; }
+  @keyframes scanline { 0%{top:38px} 100%{top:176px} }
+  canvas { display: none; }
+  #placeholder p { font-size: 13px; color: #888; margin-top: 8px; text-align: center; }
+  #result { border-radius: 10px; padding: 14px 16px; margin-bottom: 1rem; display: none; }
+  #result.ok { background: #e8f5e9; }
+  #result.err { background: #fdecea; }
+  #result.warn { background: #fff8e1; }
+  #result-name { font-size: 17px; font-weight: 600; margin-bottom: 3px; }
+  #result-name.ok { color: #2e7d32; }
+  #result-name.err { color: #c62828; }
+  #result-name.warn { color: #f57f17; }
+  #result-msg { font-size: 12px; color: #666; }
+  .btn-row { display: flex; gap: 8px; margin-bottom: 1rem; }
+  .btn-row button { flex: 1; }
+  button { padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; background: #fff; font-size: 14px; cursor: pointer; }
+  button:active { background: #f0f0f0; }
+  button.primary { background: #111; color: #fff; border-color: #111; }
+  #manual-row { display: none; margin-bottom: 1rem; }
+  #manual-row input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; margin-bottom: 8px; }
+  #search { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 1rem; }
+  .guest-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid #eee; background: #fff; margin-bottom: 6px; }
+  .guest-item.in { border-color: #a5d6a7; background: #f1f8f1; }
+  .bdg { font-size: 11px; padding: 3px 8px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
+  .bdg.in { background: #e8f5e9; color: #2e7d32; }
+  .bdg.out { background: #f5f5f5; color: #888; }
+  .g-name { font-size: 14px; font-weight: 500; flex: 1; }
+  .g-sub { font-size: 11px; color: #888; }
+  .g-time { font-size: 11px; color: #2e7d32; }
+  .info-card { background: #f0f0f0; border-radius: 10px; padding: 1rem; font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 1rem; }
+  textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-family: monospace; font-size: 12px; height: 150px; resize: vertical; margin-bottom: 8px; }
+  #import-status { font-size: 13px; color: #666; margin-top: 8px; }
+  .empty { font-size: 13px; color: #888; text-align: center; padding: 2rem 1rem; }
+  .section-lbl { font-size: 13px; color: #666; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>Control de acceso</h1>
+    <div class="sync-row">
+      <div class="dot" id="sync-dot"></div>
+      <span class="sync-lbl" id="sync-lbl">Conectando...</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('scan')">Escanear</button>
+    <button class="tab" onclick="showTab('lista')">Invitados</button>
+    <button class="tab" onclick="showTab('config')">Cargar lista</button>
+  </div>
+
+  <div id="panel-scan" class="panel active">
+    <div class="stats">
+      <div class="stat"><div class="stat-n" id="s-tot">—</div><div class="stat-l">Invitados</div></div>
+      <div class="stat"><div class="stat-n" id="s-in" style="color:#2e7d32">—</div><div class="stat-l">Ingresaron</div></div>
+      <div class="stat"><div class="stat-n" id="s-pct">—</div><div class="stat-l">Asistencia</div></div>
+    </div>
+
+    <div id="scanner-box">
+      <video id="video" autoplay playsinline muted></video>
+      <div id="scan-frame"></div>
+      <div id="scan-line"></div>
+      <div id="placeholder" style="display:flex;flex-direction:column;align-items:center;gap:8px">
+        <svg width="52" height="52" viewBox="0 0 52 52" fill="none" style="opacity:.3">
+          <rect x="4" y="4" width="18" height="18" rx="3" stroke="#111" stroke-width="2"/>
+          <rect x="9" y="9" width="8" height="8" fill="#111" rx="1"/>
+          <rect x="30" y="4" width="18" height="18" rx="3" stroke="#111" stroke-width="2"/>
+          <rect x="35" y="9" width="8" height="8" fill="#111" rx="1"/>
+          <rect x="4" y="30" width="18" height="18" rx="3" stroke="#111" stroke-width="2"/>
+          <rect x="9" y="35" width="8" height="8" fill="#111" rx="1"/>
+          <rect x="30" y="30" width="8" height="8" fill="#111" rx="1" opacity=".4"/>
+          <rect x="44" y="30" width="8" height="8" fill="#111" rx="1" opacity=".4"/>
+          <rect x="30" y="44" width="8" height="8" fill="#111" rx="1" opacity=".4"/>
+          <rect x="44" y="44" width="8" height="8" fill="#111" rx="1" opacity=".4"/>
+        </svg>
+        <p>Tocá "Activar cámara" para escanear</p>
+      </div>
+      <canvas id="cv"></canvas>
+    </div>
+
+    <div class="btn-row">
+      <button class="primary" id="btn-cam" onclick="toggleCam()">Activar cámara</button>
+      <button onclick="toggleManual()">Ingresar DNI</button>
+    </div>
+
+    <div id="manual-row">
+      <input type="number" id="dni-input" placeholder="Número de DNI" inputmode="numeric">
+      <button class="primary" onclick="processDNI(document.getElementById('dni-input').value)" style="width:100%">Verificar acceso</button>
+    </div>
+
+    <div id="result"></div>
+  </div>
+
+  <div id="panel-lista" class="panel">
+    <input type="text" id="search" placeholder="Buscar por nombre o DNI..." oninput="renderList(this.value)">
+    <div id="guest-list"><div class="empty">Cargando invitados...</div></div>
+  </div>
+
+  <div id="panel-config" class="panel">
+    <div class="info-card">
+      Pegá tu lista en formato <code>DNI, Nombre Apellido</code> — una persona por línea.<br>
+      El DNI debe coincidir exactamente con el contenido del QR.
+    </div>
+    <div class="section-lbl">Lista de invitados</div>
+    <textarea id="import-txt" placeholder="33703031, Carla Alderete&#10;32456789, Ana García&#10;28901234, Carlos López"></textarea>
+    <div style="display:flex;gap:8px;margin-bottom:0.5rem">
+      <button class="primary" onclick="importGuests()" style="flex:1">Subir a Firebase</button>
+      <button onclick="clearAll()" style="flex:1">Borrar todo</button>
+    </div>
+    <div id="import-status"></div>
+
+    <div class="info-card" style="margin-top:1.25rem">
+      <strong>Guardar en iPhone como app:</strong><br>
+      Abrí este archivo en Safari → tocá el botón compartir ⬆ → "Agregar a pantalla de inicio" → queda como ícono. Hacelo en los dos iPhones.
+    </div>
+
+    <button onclick="exportCSV()" style="width:100%;margin-top:0.5rem">Exportar asistencia (.csv)</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, doc, setDoc, collection, onSnapshot, updateDoc, deleteDoc, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyATCLBf37_oPpSpcpD2L2vwElmiEMc3R3E",
+  authDomain: "reverence-project.firebaseapp.com",
+  projectId: "reverence-project",
+  storageBucket: "reverence-project.firebasestorage.app",
+  messagingSenderId: "949135364513",
+  appId: "1:949135364513:web:920baf3301689811e7fbe0"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+
+let guests = {};
+let scanning = false, stream = null, scanLoop = null;
+let lastDNI = '', lastScanTime = 0;
+
+function setSyncStatus(ok, msg) {
+  document.getElementById('sync-dot').className = 'dot ' + (ok ? 'ok' : 'err');
+  document.getElementById('sync-lbl').textContent = msg;
+}
+
+function updateStats() {
+  const all = Object.values(guests);
+  if (!all.length) {
+    ['s-tot','s-in','s-pct'].forEach(id => document.getElementById(id).textContent = '—');
+    return;
+  }
+  const inn = all.filter(g => g.ingreso).length;
+  document.getElementById('s-tot').textContent = all.length;
+  document.getElementById('s-in').textContent = inn;
+  document.getElementById('s-pct').textContent = Math.round(inn / all.length * 100) + '%';
+}
+
+function renderList(q) {
+  const el = document.getElementById('guest-list');
+  let all = Object.entries(guests);
+  if (q) {
+    const qq = q.toLowerCase();
+    all = all.filter(([dni, g]) => g.nombre.toLowerCase().includes(qq) || dni.includes(qq));
+  }
+  if (!all.length) { el.innerHTML = '<div class="empty">Sin resultados</div>'; return; }
+  all.sort(([,a],[,b]) => b.ingreso - a.ingreso || a.nombre.localeCompare(b.nombre));
+  el.innerHTML = all.map(([dni, g]) => `
+    <div class="guest-item ${g.ingreso ? 'in' : ''}">
+      <span class="bdg ${g.ingreso ? 'in' : 'out'}">${g.ingreso ? 'Ingresó' : 'Pendiente'}</span>
+      <span class="g-name">${g.nombre}</span>
+      <div style="text-align:right">
+        <div class="g-sub">DNI ${dni}</div>
+        ${g.hora ? `<div class="g-time">${g.hora}</div>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function showResult(name, msg, type) {
+  const r = document.getElementById('result');
+  r.style.display = 'block'; r.className = type;
+  const icon = type === 'ok' ? '✓ ' : type === 'warn' ? '⚠ ' : '✕ ';
+  r.innerHTML = `<div id="result-name" class="${type}">${icon}${name}</div><div id="result-msg">${msg}</div>`;
+  clearTimeout(r._t);
+  r._t = setTimeout(() => r.style.display = 'none', 4500);
+}
+
+async function processDNI(raw) {
+  const dni = String(raw).trim().replace(/\D/g, '');
+  if (!dni) return;
+  document.getElementById('dni-input').value = '';
+  if (!guests[dni]) { showResult('DNI no encontrado', 'El DNI ' + dni + ' no está en la lista.', 'err'); return; }
+  const g = guests[dni];
+  if (g.ingreso) { showResult(g.nombre, 'Este QR ya fue utilizado — acceso denegado.', 'warn'); return; }
+  try {
+    const hora = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    await updateDoc(doc(db, 'invitados', dni), { ingreso: true, hora });
+    showResult(g.nombre, 'Acceso permitido · ' + hora, 'ok');
+  } catch(e) { showResult('Error de conexión', 'No se pudo registrar. Verificá el wifi.', 'err'); }
+}
+
+async function importGuests() {
+  const txt = document.getElementById('import-txt').value.trim();
+  if (!txt) return;
+  const lines = txt.split('\n').filter(l => l.trim());
+  let ok = 0, errors = 0;
+  document.getElementById('import-status').textContent = 'Subiendo...';
+  for (const line of lines) {
+    const parts = line.split(',');
+    if (parts.length < 2) { errors++; continue; }
+    const dni = parts[0].trim().replace(/\D/g,'');
+    const nombre = parts.slice(1).join(',').trim();
+    if (!dni || !nombre) { errors++; continue; }
+    try {
+      await setDoc(doc(db, 'invitados', dni), { nombre, ingreso: false, hora: '' });
+      ok++;
+    } catch(e) { errors++; }
+  }
+  document.getElementById('import-status').textContent = ok + ' invitados subidos.' + (errors ? ' ' + errors + ' con error.' : '');
+}
+
+async function clearAll() {
+  if (!confirm('¿Borrar todos los invitados de Firebase?')) return;
+  const snap = await getDocs(collection(db, 'invitados'));
+  for (const d of snap.docs) await deleteDoc(d.ref);
+  document.getElementById('import-status').textContent = 'Lista borrada.';
+}
+
+function exportCSV() {
+  const rows = ['DNI,Nombre,Ingresó,Hora'];
+  Object.entries(guests).forEach(([dni, g]) => rows.push(`${dni},"${g.nombre}",${g.ingreso?'SI':'NO'},${g.hora||''}`));
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'asistencia-fiesta.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function toggleManual() {
+  const m = document.getElementById('manual-row');
+  m.style.display = m.style.display === 'none' || !m.style.display ? 'block' : 'none';
+  if (m.style.display === 'block') document.getElementById('dni-input').focus();
+}
+
+async function toggleCam() {
+  const btn = document.getElementById('btn-cam');
+  if (scanning) {
+    scanning = false; clearInterval(scanLoop);
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    document.getElementById('video').style.display = 'none';
+    document.getElementById('placeholder').style.display = 'flex';
+    document.getElementById('scan-frame').style.display = 'none';
+    document.getElementById('scan-line').style.display = 'none';
+    btn.textContent = 'Activar cámara'; return;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
+    const v = document.getElementById('video');
+    v.srcObject = stream; v.style.display = 'block';
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('scan-frame').style.display = 'block';
+    document.getElementById('scan-line').style.display = 'block';
+    scanning = true; btn.textContent = 'Detener cámara';
+    v.addEventListener('loadedmetadata', () => {
+      const cv = document.getElementById('cv');
+      const ctx = cv.getContext('2d');
+      scanLoop = setInterval(() => {
+        if (!scanning || v.videoWidth === 0) return;
+        cv.width = v.videoWidth; cv.height = v.videoHeight;
+        ctx.drawImage(v, 0, 0);
+        const img = ctx.getImageData(0, 0, cv.width, cv.height);
+        const code = window.jsQR && window.jsQR(img.data, img.width, img.height);
+        if (code && code.data) {
+          const now = Date.now();
+          if (code.data !== lastDNI || now - lastScanTime > 3500) {
+            lastDNI = code.data; lastScanTime = now;
+            processDNI(code.data);
+          }
+        }
+      }, 250);
+    }, { once: true });
+  } catch(e) { showResult('Sin acceso a cámara', 'Usá el ingreso manual de DNI.', 'err'); }
+}
+
+function showTab(t) {
+  document.querySelectorAll('.tab').forEach((b,i) => b.classList.toggle('active', ['scan','lista','config'][i] === t));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + t).classList.add('active');
+  if (t === 'lista') renderList('');
+}
+
+window.showTab = showTab;
+window.toggleCam = toggleCam;
+window.toggleManual = toggleManual;
+window.processDNI = processDNI;
+window.importGuests = importGuests;
+window.clearAll = clearAll;
+window.exportCSV = exportCSV;
+
+onSnapshot(collection(db, 'invitados'), snap => {
+  guests = {};
+  snap.forEach(d => { guests[d.id] = d.data(); });
+  updateStats();
+  renderList(document.getElementById('search')?.value || '');
+  setSyncStatus(true, 'Sincronizado');
+}, () => setSyncStatus(false, 'Sin conexión'));
+
+setSyncStatus(true, 'Conectado');
+</script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+</body>
+</html>
