@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generador de QR — Fiesta</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 1.5rem 1rem; color: #111; }
+  .container { max-width: 500px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 1.5rem; }
+  .tabs { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 1.5rem; }
+  .tab { padding: 8px 20px; font-size: 14px; cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; color: #888; }
+  .tab.active { color: #111; border-bottom: 2px solid #111; font-weight: 500; }
+  .panel { display: none; } .panel.active { display: block; }
+  label { font-size: 13px; color: #666; display: block; margin-bottom: 6px; }
+  textarea, input[type=text], input[type=number] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: monospace; background: #fff; margin-bottom: 1rem; }
+  textarea { height: 180px; resize: vertical; }
+  .btn-row { display: flex; gap: 8px; margin-bottom: 1rem; }
+  button { padding: 10px 16px; border: 1px solid #ddd; border-radius: 8px; background: #fff; font-size: 14px; cursor: pointer; }
+  button:hover { background: #f0f0f0; }
+  button.primary { background: #111; color: #fff; border-color: #111; }
+  button.primary:hover { background: #333; }
+  #status { font-size: 13px; color: #666; margin-bottom: 1rem; min-height: 18px; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 1.5rem; }
+  .qr-card { background: #fff; border: 1px solid #eee; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .qr-name { font-size: 12px; font-weight: 600; text-align: center; line-height: 1.3; }
+  .qr-dni { font-size: 11px; color: #888; text-align: center; }
+  .qr-dl { font-size: 11px; color: #0066cc; border: none; background: none; cursor: pointer; text-decoration: underline; padding: 2px 0; }
+  #dl-btn { display: none; width: 100%; }
+  .info-box { background: #f0f0f0; border-radius: 10px; padding: 1rem; font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 1rem; }
+  #single-preview { display: none; flex-direction: column; align-items: center; gap: 10px; padding: 1.25rem; background: #f8f8f8; border-radius: 10px; margin-bottom: 1rem; }
+  #single-name-lbl { font-size: 15px; font-weight: 600; }
+  #single-dni-lbl { font-size: 13px; color: #888; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Generador de QR por DNI</h1>
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('bulk')">Lista completa</button>
+    <button class="tab" onclick="showTab('single')">QR individual</button>
+  </div>
+
+  <div id="panel-bulk" class="panel active">
+    <label>Formato: <code>DNI, Nombre Apellido</code> — una por línea</label>
+    <textarea id="list-input" placeholder="33703031, Carla Alderete&#10;32456789, Ana García&#10;28901234, Carlos López"></textarea>
+    <div class="btn-row">
+      <button class="primary" onclick="generateAll()">Generar QRs</button>
+      <button onclick="loadDemo()">Cargar demo</button>
+    </div>
+    <div id="status"></div>
+    <div id="grid"></div>
+    <button id="dl-btn" class="primary" onclick="downloadZip()">Descargar todos como PNG (ZIP)</button>
+  </div>
+
+  <div id="panel-single" class="panel">
+    <div class="info-box">Generá el QR de un invitado para enviarlo por WhatsApp de forma individual.</div>
+    <label>Nombre completo</label>
+    <input type="text" id="s-name" placeholder="Carla Alderete">
+    <label>Número de DNI</label>
+    <input type="number" id="s-dni" placeholder="33703031" inputmode="numeric">
+    <button class="primary" onclick="generateSingle()" style="width:100%;margin-bottom:1rem">Generar QR</button>
+    <div id="single-preview">
+      <canvas id="single-canvas"></canvas>
+      <div id="single-name-lbl"></div>
+      <div id="single-dni-lbl"></div>
+      <button class="primary" onclick="downloadSingle()" style="width:100%">Descargar PNG</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const W=320,H=380,QS=260,QX=30,QY=20;
+let generated=[];
+
+function showTab(t){
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',['bulk','single'][i]===t));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+t).classList.add('active');
+}
+
+async function buildCanvas(dni,nombre){
+  const cv=document.createElement('canvas');
+  cv.width=W;cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,H);
+  const qc=document.createElement('canvas');
+  await QRCode.toCanvas(qc,dni,{width:QS,margin:1,color:{dark:'#000000',light:'#ffffff'}});
+  ctx.drawImage(qc,QX,QY,QS,QS);
+  ctx.fillStyle='#111111';ctx.font='bold 17px sans-serif';ctx.textAlign='center';
+  ctx.fillText(nombre.length>28?nombre.substring(0,27)+'…':nombre,W/2,QY+QS+30);
+  ctx.fillStyle='#888888';ctx.font='13px sans-serif';
+  ctx.fillText('DNI '+dni,W/2,QY+QS+52);
+  return cv;
+}
+
+function parseList(txt){
+  return txt.trim().split('\n').map(l=>{
+    const parts=l.split(',');
+    if(parts.length<2)return null;
+    const dni=parts[0].trim().replace(/\D/g,'');
+    const nombre=parts.slice(1).join(',').trim();
+    return(dni&&nombre)?{dni,nombre}:null;
+  }).filter(Boolean);
+}
+
+async function generateAll(){
+  const list=parseList(document.getElementById('list-input').value);
+  if(!list.length){document.getElementById('status').textContent='No se encontraron invitados válidos.';return;}
+  const grid=document.getElementById('grid');
+  const dlBtn=document.getElementById('dl-btn');
+  grid.innerHTML='';dlBtn.style.display='none';generated=[];
+  document.getElementById('status').textContent='Generando '+list.length+' QRs...';
+  for(let i=0;i<list.length;i++){
+    const{dni,nombre}=list[i];
+    const cv=await buildCanvas(dni,nombre);
+    const card=document.createElement('div');card.className='qr-card';
+    const preview=document.createElement('canvas');preview.width=110;preview.height=110;
+    preview.getContext('2d').drawImage(cv,QX,QY,QS,QS,0,0,110,110);
+    const nameEl=document.createElement('div');nameEl.className='qr-name';nameEl.textContent=nombre;
+    const dniEl=document.createElement('div');dniEl.className='qr-dni';dniEl.textContent='DNI '+dni;
+    const dlEl=document.createElement('button');dlEl.className='qr-dl';dlEl.textContent='Descargar';
+    dlEl.onclick=()=>triggerDownload(cv,dni,nombre);
+    card.append(preview,nameEl,dniEl,dlEl);
+    grid.appendChild(card);
+    generated.push({dni,nombre,cv});
+    document.getElementById('status').textContent=(i+1)+' / '+list.length+' generados...';
+    await new Promise(r=>setTimeout(r,10));
+  }
+  document.getElementById('status').textContent=list.length+' QRs listos para descargar.';
+  dlBtn.style.display='block';
+}
+
+function triggerDownload(cv,dni,nombre){
+  const a=document.createElement('a');
+  a.href=cv.toDataURL('image/png');
+  a.download=dni+'_'+nombre.replace(/\s+/g,'-')+'.png';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
+async function downloadZip(){
+  const btn=document.getElementById('dl-btn');
+  btn.disabled=true;btn.textContent='Empaquetando...';
+  const zip=new JSZip();
+  const folder=zip.folder('QR-invitados');
+  for(const{dni,nombre,cv}of generated){
+    const b64=cv.toDataURL('image/png').split(',')[1];
+    folder.file(dni+'_'+nombre.replace(/\s+/g,'-')+'.png',b64,{base64:true});
+  }
+  const blob=await zip.generateAsync({type:'blob'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='QR-invitados-fiesta.zip';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  btn.disabled=false;btn.textContent='Descargar todos como PNG (ZIP)';
+}
+
+function loadDemo(){
+  document.getElementById('list-input').value='33703031, Carla Alderete\n32456789, Ana García\n28901234, Carlos López\n35678012, María Rodríguez\n30123456, Juan Pérez';
+  generateAll();
+}
+
+async function generateSingle(){
+  const nombre=document.getElementById('s-name').value.trim();
+  const dni=document.getElementById('s-dni').value.trim().replace(/\D/g,'');
+  if(!nombre||!dni)return;
+  const cv=await buildCanvas(dni,nombre);
+  window._sc={cv,dni,nombre};
+  const preview=document.getElementById('single-canvas');
+  preview.width=220;preview.height=260;
+  preview.getContext('2d').drawImage(cv,0,0,W,H,0,0,220,260);
+  document.getElementById('single-name-lbl').textContent=nombre;
+  document.getElementById('single-dni-lbl').textContent='DNI '+dni;
+  document.getElementById('single-preview').style.display='flex';
+}
+
+function downloadSingle(){
+  const{cv,dni,nombre}=window._sc||{};
+  if(!cv)return;
+  triggerDownload(cv,dni,nombre);
+}
+</script>
+</body>
+</html>
