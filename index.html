@@ -6,80 +6,88 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Control Fiesta">
-<title>Control de Acceso — Fiesta</title>
+<title>Control de Acceso</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 1rem; color: #111; }
-  .container { max-width: 440px; margin: 0 auto; }
-  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
-  .header h1 { font-size: 18px; font-weight: 600; }
-  .sync-row { display: flex; align-items: center; gap: 6px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
-  .dot.ok { background: #3a7d44; animation: pulse 2s infinite; }
-  .dot.err { background: #c0392b; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
-  .sync-lbl { font-size: 12px; color: #888; }
-  .tabs { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 1.25rem; }
-  .tab { padding: 8px 16px; font-size: 14px; cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; color: #888; }
-  .tab.active { color: #111; border-bottom: 2px solid #111; font-weight: 500; }
-  .panel { display: none; } .panel.active { display: block; }
-  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 1.25rem; }
-  .stat { background: #fff; border: 1px solid #eee; border-radius: 10px; padding: 12px; text-align: center; }
-  .stat-n { font-size: 26px; font-weight: 600; }
-  .stat-l { font-size: 11px; color: #888; margin-top: 2px; }
-  #scanner-box { background: #eee; border-radius: 12px; height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; margin-bottom: 1rem; position: relative; overflow: hidden; }
-  #video { width: 100%; height: 100%; object-fit: cover; display: none; border-radius: 12px; }
-  #scan-frame { position: absolute; width: 150px; height: 150px; border: 2px solid #0066cc; border-radius: 8px; display: none; pointer-events: none; }
-  #scan-line { position: absolute; width: 130px; height: 2px; background: #0066cc; opacity: .7; display: none; animation: scanline 1.8s ease-in-out infinite; }
-  @keyframes scanline { 0%{top:38px} 100%{top:176px} }
-  canvas { display: none; }
-  #placeholder p { font-size: 13px; color: #888; margin-top: 8px; text-align: center; }
-  #result { border-radius: 10px; padding: 14px 16px; margin-bottom: 1rem; display: none; }
-  #result.ok { background: #e8f5e9; }
-  #result.err { background: #fdecea; }
-  #result.warn { background: #fff8e1; }
-  #result-name { font-size: 17px; font-weight: 600; margin-bottom: 3px; }
-  #result-name.ok { color: #2e7d32; }
-  #result-name.err { color: #c62828; }
-  #result-name.warn { color: #f57f17; }
-  #result-msg { font-size: 12px; color: #666; }
-  .btn-row { display: flex; gap: 8px; margin-bottom: 1rem; }
-  .btn-row button { flex: 1; }
-  button { padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; background: #fff; font-size: 14px; cursor: pointer; }
-  button:active { background: #f0f0f0; }
-  button.primary { background: #111; color: #fff; border-color: #111; }
-  #manual-row { display: none; margin-bottom: 1rem; }
-  #manual-row input { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; margin-bottom: 8px; }
-  #search { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 1rem; }
-  .guest-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid #eee; background: #fff; margin-bottom: 6px; }
-  .guest-item.in { border-color: #a5d6a7; background: #f1f8f1; }
-  .bdg { font-size: 11px; padding: 3px 8px; border-radius: 20px; white-space: nowrap; flex-shrink: 0; }
-  .bdg.in { background: #e8f5e9; color: #2e7d32; }
-  .bdg.out { background: #f5f5f5; color: #888; }
-  .g-name { font-size: 14px; font-weight: 500; flex: 1; }
-  .g-sub { font-size: 11px; color: #888; }
-  .g-time { font-size: 11px; color: #2e7d32; }
-  .info-card { background: #f0f0f0; border-radius: 10px; padding: 1rem; font-size: 13px; color: #666; line-height: 1.6; margin-bottom: 1rem; }
-  textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-family: monospace; font-size: 12px; height: 150px; resize: vertical; margin-bottom: 8px; }
-  #import-status { font-size: 13px; color: #666; margin-top: 8px; }
-  .empty { font-size: 13px; color: #888; text-align: center; padding: 2rem 1rem; }
-  .section-lbl { font-size: 13px; color: #666; margin-bottom: 8px; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;padding:1rem;color:#111}
+.container{max-width:440px;margin:0 auto}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem}
+.header h1{font-size:18px;font-weight:600}
+.status-pill{display:flex;align-items:center;gap:5px;font-size:12px;padding:4px 10px;border-radius:20px;background:#f0f0f0;color:#666}
+.dot{width:7px;height:7px;border-radius:50%;background:#ccc;flex-shrink:0}
+.dot.online{background:#2e7d32;animation:pulse 2s infinite}
+.dot.offline{background:#e65100}
+.dot.syncing{background:#1565c0;animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.tabs{display:flex;border-bottom:1px solid #ddd;margin-bottom:1.25rem}
+.tab{padding:8px 16px;font-size:14px;cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;color:#888}
+.tab.active{color:#111;border-bottom:2px solid #111;font-weight:500}
+.panel{display:none}.panel.active{display:block}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:1.25rem}
+.stat{background:#fff;border:1px solid #eee;border-radius:10px;padding:12px;text-align:center}
+.stat-n{font-size:26px;font-weight:600}
+.stat-l{font-size:11px;color:#888;margin-top:2px}
+#scanner-box{background:#eee;border-radius:12px;height:220px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;margin-bottom:1rem;position:relative;overflow:hidden}
+#video{width:100%;height:100%;object-fit:cover;display:none;border-radius:12px}
+#scan-frame{position:absolute;width:150px;height:150px;border:2px solid #0066cc;border-radius:8px;display:none;pointer-events:none}
+#scan-line{position:absolute;width:130px;height:2px;background:#0066cc;opacity:.7;display:none;animation:scanline 1.8s ease-in-out infinite}
+@keyframes scanline{0%{top:38px}100%{top:176px}}
+canvas{display:none}
+#result{border-radius:10px;padding:14px 16px;margin-bottom:1rem;display:none}
+#result.ok{background:#e8f5e9}
+#result.err{background:#fdecea}
+#result.warn{background:#fff8e1}
+#result-name{font-size:17px;font-weight:600;margin-bottom:3px}
+#result-name.ok{color:#2e7d32}
+#result-name.err{color:#c62828}
+#result-name.warn{color:#f57f17}
+#result-msg{font-size:12px;color:#666}
+.btn-row{display:flex;gap:8px;margin-bottom:1rem}
+.btn-row button{flex:1}
+button{padding:10px 14px;border:1px solid #ddd;border-radius:8px;background:#fff;font-size:14px;cursor:pointer}
+button:active{background:#f0f0f0}
+button.primary{background:#111;color:#fff;border-color:#111}
+button.danger{color:#c62828;border-color:#f5c2c7}
+#manual-row{display:none;margin-bottom:1rem}
+#manual-row input{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:16px;margin-bottom:8px}
+#search{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;margin-bottom:1rem}
+.guest-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1px solid #eee;background:#fff;margin-bottom:6px}
+.guest-item.in{border-color:#a5d6a7;background:#f1f8f1}
+.guest-item.pending-sync{border-color:#90caf9;background:#e3f2fd}
+.bdg{font-size:11px;padding:3px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+.bdg.in{background:#e8f5e9;color:#2e7d32}
+.bdg.out{background:#f5f5f5;color:#888}
+.bdg.sync{background:#e3f2fd;color:#1565c0}
+.g-name{font-size:14px;font-weight:500;flex:1}
+.g-sub{font-size:11px;color:#888}
+.g-time{font-size:11px;color:#2e7d32}
+.info-card{background:#f0f0f0;border-radius:10px;padding:1rem;font-size:13px;color:#666;line-height:1.6;margin-bottom:1rem}
+.info-card strong{color:#111}
+textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-family:monospace;font-size:12px;height:150px;resize:vertical;margin-bottom:8px}
+#import-status{font-size:13px;color:#666;margin-top:8px;min-height:18px}
+.empty{font-size:13px;color:#888;text-align:center;padding:2rem 1rem}
+.section-lbl{font-size:13px;font-weight:500;color:#666;margin-bottom:8px}
+.pending-banner{background:#e3f2fd;border-radius:8px;padding:10px 14px;font-size:13px;color:#1565c0;margin-bottom:1rem;display:none}
 </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
     <h1>Control de acceso</h1>
-    <div class="sync-row">
-      <div class="dot" id="sync-dot"></div>
-      <span class="sync-lbl" id="sync-lbl">Conectando...</span>
+    <div class="status-pill">
+      <div class="dot" id="net-dot"></div>
+      <span id="net-lbl">Iniciando...</span>
     </div>
+  </div>
+
+  <div id="pending-banner" class="pending-banner">
+    Hay ingresos pendientes de sincronizar. Se subirán automáticamente cuando haya conexión.
   </div>
 
   <div class="tabs">
     <button class="tab active" onclick="showTab('scan')">Escanear</button>
     <button class="tab" onclick="showTab('lista')">Invitados</button>
-    <button class="tab" onclick="showTab('config')">Cargar lista</button>
+    <button class="tab" onclick="showTab('config')">Configurar</button>
   </div>
 
   <div id="panel-scan" class="panel active">
@@ -106,7 +114,7 @@
           <rect x="30" y="44" width="8" height="8" fill="#111" rx="1" opacity=".4"/>
           <rect x="44" y="44" width="8" height="8" fill="#111" rx="1" opacity=".4"/>
         </svg>
-        <p>Tocá "Activar cámara" para escanear</p>
+        <p style="font-size:13px;color:#888;text-align:center">Tocá "Activar cámara"<br>para escanear</p>
       </div>
       <canvas id="cv"></canvas>
     </div>
@@ -126,34 +134,44 @@
 
   <div id="panel-lista" class="panel">
     <input type="text" id="search" placeholder="Buscar por nombre o DNI..." oninput="renderList(this.value)">
-    <div id="guest-list"><div class="empty">Cargando invitados...</div></div>
+    <div id="guest-list"><div class="empty">Sin invitados cargados</div></div>
   </div>
 
   <div id="panel-config" class="panel">
     <div class="info-card">
-      Pegá tu lista en formato <code>DNI, Nombre Apellido</code> — una persona por línea.<br>
-      El DNI debe coincidir exactamente con el contenido del QR.
+      <strong>Cómo funciona:</strong><br>
+      Con internet → sincroniza en tiempo real entre todos los celulares.<br>
+      Sin internet → guarda localmente y sincroniza solo cuando vuelve la señal.<br>
+      Funciona en iPhone y Android, sin instalar nada.
     </div>
-    <div class="section-lbl">Lista de invitados</div>
+
+    <div class="section-lbl">Cargar lista de invitados</div>
+    <div class="info-card">Formato: <code>DNI, Nombre Apellido</code> — una por línea. Si la lista trae un email al final, se ignora: los emails no se guardan en la base.</div>
     <textarea id="import-txt" placeholder="33703031, Carla Alderete&#10;32456789, Ana García&#10;28901234, Carlos López"></textarea>
-    <div style="display:flex;gap:8px;margin-bottom:0.5rem">
-      <button class="primary" onclick="importGuests()" style="flex:1">Subir a Firebase</button>
-      <button onclick="clearAll()" style="flex:1">Borrar todo</button>
+    <div style="display:flex;gap:8px">
+      <button class="primary" onclick="importGuests()" style="flex:1">Guardar y subir</button>
+      <button onclick="loadDemo()" style="flex:1">Demo</button>
     </div>
     <div id="import-status"></div>
 
-    <div class="info-card" style="margin-top:1.25rem">
-      <strong>Guardar en iPhone como app:</strong><br>
-      Abrí este archivo en Safari → tocá el botón compartir ⬆ → "Agregar a pantalla de inicio" → queda como ícono. Hacelo en los dos iPhones.
+    <div style="margin-top:1.5rem;display:flex;flex-direction:column;gap:8px">
+      <button onclick="forcSync()">Sincronizar ahora</button>
+      <button onclick="exportCSV()">Exportar asistencia (.csv)</button>
+      <button class="danger" onclick="resetIngress()">Reiniciar ingresos</button>
+      <button class="danger" onclick="clearAll()">Borrar toda la lista</button>
     </div>
 
-    <button onclick="exportCSV()" style="width:100%;margin-top:0.5rem">Exportar asistencia (.csv)</button>
+    <div class="info-card" style="margin-top:1.5rem">
+      <strong>Para el policía:</strong><br>
+      Compartile esta URL por WhatsApp. La abre en el navegador de su celular (iPhone o Android) y listo — no necesita instalar nada.
+    </div>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, doc, setDoc, collection, onSnapshot, updateDoc, deleteDoc, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, doc, setDoc, collection, onSnapshot, updateDoc, getDocs, deleteDoc, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyATCLBf37_oPpSpcpD2L2vwElmiEMc3R3E",
@@ -167,15 +185,80 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
 
+// Habilitar persistencia offline — clave para funcionar sin internet
+try {
+  await enableIndexedDbPersistence(db);
+} catch(e) {
+  // Si ya está habilitado en otra pestaña, no importa
+}
+
 let guests = {};
 let scanning = false, stream = null, scanLoop = null;
 let lastDNI = '', lastScanTime = 0;
+let isOnline = navigator.onLine;
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const PENDING_KEY = 'fiesta_pending';
 
-function setSyncStatus(ok, msg) {
-  document.getElementById('sync-dot').className = 'dot ' + (ok ? 'ok' : 'err');
-  document.getElementById('sync-lbl').textContent = msg;
+// ── Estado de red ────────────────────────────────────────────────────────────
+function updateNetStatus(online, syncing) {
+  const dot = document.getElementById('net-dot');
+  const lbl = document.getElementById('net-lbl');
+  if (syncing) {
+    dot.className = 'dot syncing';
+    lbl.textContent = 'Sincronizando...';
+  } else if (online) {
+    dot.className = 'dot online';
+    lbl.textContent = 'Online · sincronizado';
+  } else {
+    dot.className = 'dot offline';
+    lbl.textContent = 'Sin conexión · modo local';
+  }
 }
 
+window.addEventListener('online', () => { isOnline = true; syncPending(); updateNetStatus(true, false); });
+window.addEventListener('offline', () => { isOnline = false; updateNetStatus(false, false); });
+updateNetStatus(navigator.onLine, false);
+
+// ── Pendientes offline ───────────────────────────────────────────────────────
+function getPending() {
+  try { return JSON.parse(localStorage.getItem(PENDING_KEY) || '[]'); } catch(e) { return []; }
+}
+function addPending(dni, hora) {
+  const p = getPending();
+  if (!p.find(x => x.dni === dni)) p.push({ dni, hora });
+  localStorage.setItem(PENDING_KEY, JSON.stringify(p));
+  document.getElementById('pending-banner').style.display = 'block';
+}
+function clearPending() {
+  localStorage.removeItem(PENDING_KEY);
+  document.getElementById('pending-banner').style.display = 'none';
+}
+
+async function syncPending() {
+  const p = getPending();
+  if (!p.length) return;
+  updateNetStatus(true, true);
+  const fallidos = [];
+  for (const item of p) {
+    try {
+      await updateDoc(doc(db, 'invitados', item.dni), { ingreso: true, hora: item.hora });
+    } catch(e) { fallidos.push(item); }
+  }
+  if (fallidos.length) localStorage.setItem(PENDING_KEY, JSON.stringify(fallidos));
+  else clearPending();
+  updateNetStatus(true, false);
+}
+
+window.forcSync = async function() {
+  if (!navigator.onLine) {
+    alert('Sin conexión. Intentá cuando tengas señal.');
+    return;
+  }
+  await syncPending();
+  alert('Sincronización completada.');
+};
+
+// ── Stats y lista ────────────────────────────────────────────────────────────
 function updateStats() {
   const all = Object.values(guests);
   if (!all.length) {
@@ -185,96 +268,122 @@ function updateStats() {
   const inn = all.filter(g => g.ingreso).length;
   document.getElementById('s-tot').textContent = all.length;
   document.getElementById('s-in').textContent = inn;
-  document.getElementById('s-pct').textContent = Math.round(inn / all.length * 100) + '%';
+  document.getElementById('s-pct').textContent = Math.round(inn/all.length*100)+'%';
 }
 
 function renderList(q) {
   const el = document.getElementById('guest-list');
+  const pending = getPending().map(x => x.dni);
   let all = Object.entries(guests);
   if (q) {
     const qq = q.toLowerCase();
-    all = all.filter(([dni, g]) => g.nombre.toLowerCase().includes(qq) || dni.includes(qq));
+    all = all.filter(([dni,g]) => g.nombre.toLowerCase().includes(qq) || dni.includes(qq));
   }
   if (!all.length) { el.innerHTML = '<div class="empty">Sin resultados</div>'; return; }
   all.sort(([,a],[,b]) => b.ingreso - a.ingreso || a.nombre.localeCompare(b.nombre));
-  el.innerHTML = all.map(([dni, g]) => `
-    <div class="guest-item ${g.ingreso ? 'in' : ''}">
-      <span class="bdg ${g.ingreso ? 'in' : 'out'}">${g.ingreso ? 'Ingresó' : 'Pendiente'}</span>
-      <span class="g-name">${g.nombre}</span>
+  el.innerHTML = all.map(([dni,g]) => {
+    const isPending = pending.includes(dni);
+    const cls = g.ingreso ? (isPending ? 'pending-sync' : 'in') : '';
+    const bdgCls = g.ingreso ? (isPending ? 'sync' : 'in') : 'out';
+    const bdgTxt = g.ingreso ? (isPending ? 'Pendiente sync' : 'Ingresó') : 'Pendiente';
+    return `<div class="guest-item ${cls}">
+      <span class="bdg ${bdgCls}">${bdgTxt}</span>
+      <span class="g-name">${esc(g.nombre)}</span>
       <div style="text-align:right">
         <div class="g-sub">DNI ${dni}</div>
-        ${g.hora ? `<div class="g-time">${g.hora}</div>` : ''}
+        ${g.hora?`<div class="g-time">${g.hora}</div>`:''}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function showResult(name, msg, type) {
   const r = document.getElementById('result');
   r.style.display = 'block'; r.className = type;
-  const icon = type === 'ok' ? '✓ ' : type === 'warn' ? '⚠ ' : '✕ ';
-  r.innerHTML = `<div id="result-name" class="${type}">${icon}${name}</div><div id="result-msg">${msg}</div>`;
+  const icon = type==='ok'?'✓ ':type==='warn'?'⚠ ':'✕ ';
+  r.innerHTML = `<div id="result-name" class="${type}">${icon}${esc(name)}</div><div id="result-msg">${msg}</div>`;
   clearTimeout(r._t);
-  r._t = setTimeout(() => r.style.display = 'none', 4500);
+  r._t = setTimeout(() => r.style.display='none', 4500);
 }
 
+// ── Proceso principal ────────────────────────────────────────────────────────
 async function processDNI(raw) {
-  const dni = String(raw).trim().replace(/\D/g, '');
+  const dni = String(raw).trim().replace(/\D/g,'');
   if (!dni) return;
   document.getElementById('dni-input').value = '';
-  if (!guests[dni]) { showResult('DNI no encontrado', 'El DNI ' + dni + ' no está en la lista.', 'err'); return; }
+  if (!guests[dni]) { showResult('DNI no encontrado', 'El DNI '+dni+' no está en la lista.', 'err'); return; }
   const g = guests[dni];
   if (g.ingreso) { showResult(g.nombre, 'Este QR ya fue utilizado — acceso denegado.', 'warn'); return; }
+
+  const hora = new Date().toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
+  g.ingreso = true;
+  g.hora = hora;
+  updateStats();
+  renderList(document.getElementById('search').value || '');
+  showResult(g.nombre, 'Acceso permitido · '+hora, 'ok');
+
+  // Intentar subir a Firebase — si falla, guardar pendiente
   try {
-    const hora = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
     await updateDoc(doc(db, 'invitados', dni), { ingreso: true, hora });
-    showResult(g.nombre, 'Acceso permitido · ' + hora, 'ok');
-  } catch(e) { showResult('Error de conexión', 'No se pudo registrar. Verificá el wifi.', 'err'); }
+  } catch(e) {
+    addPending(dni, hora);
+  }
 }
 
-async function importGuests() {
+// ── Importar lista ───────────────────────────────────────────────────────────
+window.importGuests = async function() {
   const txt = document.getElementById('import-txt').value.trim();
   if (!txt) return;
   const lines = txt.split('\n').filter(l => l.trim());
-  let ok = 0, errors = 0;
-  document.getElementById('import-status').textContent = 'Subiendo...';
+  let ok=0, errors=0;
+  document.getElementById('import-status').textContent = 'Guardando...';
   for (const line of lines) {
-    const parts = line.split(',');
+    const parts = line.split(',').map(p => p.trim());
+    if (parts.length >= 3 && parts[parts.length-1].includes('@')) parts.pop(); // el email no se sube a la base
     if (parts.length < 2) { errors++; continue; }
     const dni = parts[0].trim().replace(/\D/g,'');
-    const nombre = parts.slice(1).join(',').trim();
+    const nombre = parts.slice(1).join(', ');
     if (!dni || !nombre) { errors++; continue; }
     try {
       await setDoc(doc(db, 'invitados', dni), { nombre, ingreso: false, hora: '' });
       ok++;
     } catch(e) { errors++; }
   }
-  document.getElementById('import-status').textContent = ok + ' invitados subidos.' + (errors ? ' ' + errors + ' con error.' : '');
-}
+  document.getElementById('import-status').textContent = ok+' invitados guardados.'+(errors?' '+errors+' con error.':'');
+};
 
-async function clearAll() {
-  if (!confirm('¿Borrar todos los invitados de Firebase?')) return;
+window.loadDemo = function() {
+  document.getElementById('import-txt').value =
+    '33703031, Carla Alderete\n32456789, Ana García\n28901234, Carlos López\n35678012, María Rodríguez\n30123456, Juan Pérez\n27890345, Laura Martínez\n33567890, Diego Sánchez\n31234567, Sofía Torres';
+  window.importGuests();
+};
+
+window.resetIngress = async function() {
+  if (!confirm('¿Reiniciar todos los ingresos?')) return;
+  for (const dni of Object.keys(guests)) {
+    try { await updateDoc(doc(db, 'invitados', dni), { ingreso: false, hora: '' }); } catch(e) {}
+  }
+  clearPending();
+};
+
+window.clearAll = async function() {
+  if (!confirm('¿Borrar toda la lista?')) return;
   const snap = await getDocs(collection(db, 'invitados'));
   for (const d of snap.docs) await deleteDoc(d.ref);
-  document.getElementById('import-status').textContent = 'Lista borrada.';
-}
+  clearPending();
+};
 
-function exportCSV() {
+window.exportCSV = function() {
   const rows = ['DNI,Nombre,Ingresó,Hora'];
-  Object.entries(guests).forEach(([dni, g]) => rows.push(`${dni},"${g.nombre}",${g.ingreso?'SI':'NO'},${g.hora||''}`));
-  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  Object.entries(guests).forEach(([dni,g]) => rows.push(`${dni},"${String(g.nombre).replace(/"/g,'""')}",${g.ingreso?'SI':'NO'},${g.hora||''}`));
+  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'asistencia-fiesta.csv';
+  a.href = URL.createObjectURL(blob); a.download = 'asistencia-fiesta.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
-}
+};
 
-function toggleManual() {
-  const m = document.getElementById('manual-row');
-  m.style.display = m.style.display === 'none' || !m.style.display ? 'block' : 'none';
-  if (m.style.display === 'block') document.getElementById('dni-input').focus();
-}
-
-async function toggleCam() {
+// ── Cámara ───────────────────────────────────────────────────────────────────
+window.toggleCam = async function() {
   const btn = document.getElementById('btn-cam');
   if (scanning) {
     scanning = false; clearInterval(scanLoop);
@@ -286,7 +395,7 @@ async function toggleCam() {
     btn.textContent = 'Activar cámara'; return;
   }
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}});
     const v = document.getElementById('video');
     v.srcObject = stream; v.style.display = 'block';
     document.getElementById('placeholder').style.display = 'none';
@@ -297,48 +406,55 @@ async function toggleCam() {
       const cv = document.getElementById('cv');
       const ctx = cv.getContext('2d');
       scanLoop = setInterval(() => {
-        if (!scanning || v.videoWidth === 0) return;
-        cv.width = v.videoWidth; cv.height = v.videoHeight;
-        ctx.drawImage(v, 0, 0);
-        const img = ctx.getImageData(0, 0, cv.width, cv.height);
-        const code = window.jsQR && window.jsQR(img.data, img.width, img.height);
-        if (code && code.data) {
+        if (!scanning || v.videoWidth===0) return;
+        cv.width=v.videoWidth; cv.height=v.videoHeight;
+        ctx.drawImage(v,0,0);
+        const img = ctx.getImageData(0,0,cv.width,cv.height);
+        const code = window.jsQR && window.jsQR(img.data,img.width,img.height);
+        if (code?.data) {
           const now = Date.now();
-          if (code.data !== lastDNI || now - lastScanTime > 3500) {
-            lastDNI = code.data; lastScanTime = now;
+          if (code.data!==lastDNI || now-lastScanTime>3500) {
+            lastDNI=code.data; lastScanTime=now;
             processDNI(code.data);
           }
         }
       }, 250);
-    }, { once: true });
-  } catch(e) { showResult('Sin acceso a cámara', 'Usá el ingreso manual de DNI.', 'err'); }
-}
+    }, {once:true});
+  } catch(e) { showResult('Sin acceso a cámara','Usá el ingreso manual.','err'); }
+};
 
-function showTab(t) {
-  document.querySelectorAll('.tab').forEach((b,i) => b.classList.toggle('active', ['scan','lista','config'][i] === t));
+window.toggleManual = function() {
+  const m = document.getElementById('manual-row');
+  m.style.display = m.style.display==='none'||!m.style.display ? 'block' : 'none';
+  if (m.style.display==='block') document.getElementById('dni-input').focus();
+};
+
+window.showTab = function(t) {
+  document.querySelectorAll('.tab').forEach((b,i) => b.classList.toggle('active',['scan','lista','config'][i]===t));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-' + t).classList.add('active');
-  if (t === 'lista') renderList('');
-}
+  document.getElementById('panel-'+t).classList.add('active');
+  if (t==='lista') renderList('');
+};
 
-window.showTab = showTab;
-window.toggleCam = toggleCam;
-window.toggleManual = toggleManual;
-window.processDNI = processDNI;
-window.importGuests = importGuests;
-window.clearAll = clearAll;
-window.exportCSV = exportCSV;
-
+// ── Listener Firebase en tiempo real ────────────────────────────────────────
+// Funciona online Y offline gracias a enableIndexedDbPersistence
 onSnapshot(collection(db, 'invitados'), snap => {
   guests = {};
   snap.forEach(d => { guests[d.id] = d.data(); });
   updateStats();
   renderList(document.getElementById('search')?.value || '');
-  setSyncStatus(true, 'Sincronizado');
-}, () => setSyncStatus(false, 'Sin conexión'));
+  if (navigator.onLine) updateNetStatus(true, false);
+  // Chequear si quedan pendientes
+  if (getPending().length) document.getElementById('pending-banner').style.display = 'block';
+}, err => {
+  updateNetStatus(false, false);
+});
 
-setSyncStatus(true, 'Conectado');
+// Chequear pendientes al iniciar
+if (getPending().length) {
+  document.getElementById('pending-banner').style.display = 'block';
+  if (navigator.onLine) syncPending();
+}
 </script>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </body>
 </html>

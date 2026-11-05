@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Generador QR">
+<title>Generador de QR — Fiesta</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;padding:1.5rem 1rem;color:#111}
+.container{max-width:500px;margin:0 auto}
+h1{font-size:20px;font-weight:600;margin-bottom:1.5rem}
+.tabs{display:flex;border-bottom:1px solid #ddd;margin-bottom:1.5rem}
+.tab{padding:8px 20px;font-size:14px;cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;color:#888}
+.tab.active{color:#111;border-bottom:2px solid #111;font-weight:500}
+.panel{display:none}.panel.active{display:block}
+label{font-size:13px;color:#666;display:block;margin-bottom:6px}
+textarea,input[type=text],input[type=password],input[type=number]{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;margin-bottom:1rem}
+textarea{height:180px;resize:vertical;font-family:monospace;font-size:12px}
+.btn-row{display:flex;gap:8px;margin-bottom:1rem}
+button{padding:10px 16px;border:1px solid #ddd;border-radius:8px;background:#fff;font-size:14px;cursor:pointer}
+button:active{background:#f0f0f0}
+button.primary{background:#111;color:#fff;border-color:#111}
+#status{font-size:13px;color:#666;margin-bottom:1rem;min-height:18px}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:1.5rem}
+.qr-card{background:#fff;border:1px solid #eee;border-radius:10px;padding:12px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.qr-name{font-size:12px;font-weight:600;text-align:center;line-height:1.3}
+.qr-dni{font-size:11px;color:#888;text-align:center}
+.qr-dl{font-size:11px;color:#0066cc;border:none;background:none;cursor:pointer;text-decoration:underline;padding:2px 0}
+#dl-btn{display:none;width:100%}
+.info-box{background:#f0f0f0;border-radius:10px;padding:1rem;font-size:13px;color:#666;line-height:1.6;margin-bottom:1rem}
+#single-preview{display:none;flex-direction:column;align-items:center;gap:10px;padding:1.25rem;background:#f8f8f8;border-radius:10px;margin-bottom:1rem}
+#single-name-lbl{font-size:15px;font-weight:600}
+#single-dni-lbl{font-size:13px;color:#888}
+#error-box{display:none;background:#fdecea;border-radius:8px;padding:10px 14px;font-size:13px;color:#c62828;margin-bottom:1rem}
+details{background:#fff;border:1px solid #eee;border-radius:10px;padding:10px 14px;margin-bottom:1.25rem}
+summary{font-size:14px;font-weight:500;cursor:pointer}
+details label{margin-top:10px}
+.qr-mail{font-size:11px;color:#888;word-break:break-all;text-align:center}
+.qr-nomail{font-size:11px;color:#c62828}
+.qr-sent{font-size:11px;color:#2e7d32;font-weight:600;text-align:center}
+#send-status{font-size:13px;color:#666;margin:8px 0;min-height:18px;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Generador de QR por DNI</h1>
+  <div id="error-box"></div>
+  <details id="mail-cfg">
+    <summary>Envío por email</summary>
+    <label>URL del script de envío (termina en /exec)</label>
+    <input type="text" id="mail-url" oninput="saveCfg()" placeholder="https://script.google.com/macros/s/.../exec">
+    <label>Clave del script</label>
+    <input type="password" id="mail-key" oninput="saveCfg()">
+    <label>Asunto del email</label>
+    <input type="text" id="mail-subject" oninput="saveCfg()" value="Tu entrada para la fiesta">
+    <label>Mensaje (opcional)</label>
+    <textarea id="mail-msg" oninput="saveCfg()" style="height:70px;font-family:inherit;font-size:13px" placeholder="Ej: Sábado 26/9, 21 hs. Salón ..."></textarea>
+  </details>
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('bulk')">Lista completa</button>
+    <button class="tab" onclick="showTab('single')">QR individual</button>
+  </div>
+
+  <div id="panel-bulk" class="panel active">
+    <label>Formato: <code>DNI, Nombre Apellido, email</code> — una por línea (el email es opcional)</label>
+    <textarea id="list-input" placeholder="33703031, Carla Alderete, carla@mail.com&#10;32456789, Ana García, ana@mail.com&#10;28901234, Carlos López"></textarea>
+    <div class="btn-row">
+      <button class="primary" onclick="generateAll()">Generar QRs</button>
+      <button onclick="loadDemo()">Cargar demo</button>
+    </div>
+    <div id="status"></div>
+    <div id="grid"></div>
+    <button id="dl-btn" class="primary" onclick="downloadZip()">Descargar todos como PNG (ZIP)</button>
+    <button id="send-btn" class="primary" onclick="sendAll()" style="display:none;width:100%;margin-top:8px">Enviar por email los pendientes</button>
+    <div id="send-status"></div>
+  </div>
+
+  <div id="panel-single" class="panel">
+    <div class="info-box">Generá el QR de un invitado para enviarlo por WhatsApp de forma individual.</div>
+    <label>Nombre completo</label>
+    <input type="text" id="s-name" placeholder="Carla Alderete">
+    <label>Número de DNI</label>
+    <input type="number" id="s-dni" placeholder="33703031" inputmode="numeric">
+    <label>Email (opcional)</label>
+    <input type="text" id="s-email" inputmode="email" placeholder="carla@mail.com">
+    <button class="primary" onclick="generateSingle()" style="width:100%;margin-bottom:1rem">Generar QR</button>
+    <div id="single-preview">
+      <canvas id="single-canvas"></canvas>
+      <div id="single-name-lbl"></div>
+      <div id="single-dni-lbl"></div>
+      <button class="primary" onclick="downloadSingle()" style="width:100%">Descargar PNG</button>
+      <button id="single-send" onclick="sendOne(window._sc)" style="display:none;width:100%">Enviar por email</button>
+      <div id="single-status" class="qr-sent"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+var W=320, H=380, QS=260, QX=30, QY=20;
+var generated=[];
+var libOk=false;
+
+window.addEventListener('load', function(){
+  if(typeof qrcode === 'function'){
+    libOk=true;
+  } else {
+    showError('No se pudo cargar la librería QR. Verificá tu conexión a internet y recargá la página.');
+  }
+});
+
+function showError(msg){
+  var b=document.getElementById('error-box');
+  b.textContent=msg; b.style.display='block';
+}
+
+function makeQRCanvas(text, size){
+  var qr=qrcode(0,'M');
+  qr.addData(text);
+  qr.make();
+  var mc=qr.getModuleCount();
+  var cell=Math.floor(size/mc);
+  var cv=document.createElement('canvas');
+  cv.width=cv.height=cell*mc;
+  var ctx=cv.getContext('2d');
+  ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#000000';
+  for(var r=0;r<mc;r++)
+    for(var c=0;c<mc;c++)
+      if(qr.isDark(r,c)) ctx.fillRect(c*cell,r*cell,cell,cell);
+  return cv;
+}
+
+function buildFinalCanvas(dni, nombre){
+  var qrCv=makeQRCanvas(dni, QS);
+  var cv=document.createElement('canvas');
+  cv.width=W; cv.height=H;
+  var ctx=cv.getContext('2d');
+  ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
+  ctx.drawImage(qrCv, QX, QY, QS, QS);
+  ctx.fillStyle='#111111';
+  ctx.font='bold 17px -apple-system,sans-serif';
+  ctx.textAlign='center';
+  var n=nombre.length>28?nombre.substring(0,27)+'…':nombre;
+  ctx.fillText(n, W/2, QY+QS+32);
+  ctx.fillStyle='#888888';
+  ctx.font='13px -apple-system,sans-serif';
+  ctx.fillText('DNI '+dni, W/2, QY+QS+54);
+  return cv;
+}
+
+function parseList(txt){
+  return txt.trim().split('\n').map(function(l){
+    var parts=l.split(',').map(function(p){return p.trim()});
+    if(parts.length<2) return null;
+    var dni=parts[0].replace(/\D/g,'');
+    var email='';
+    if(parts.length>=3 && parts[parts.length-1].indexOf('@')>0) email=parts.pop().toLowerCase();
+    var nombre=parts.slice(1).join(', ');
+    return (dni&&nombre)?{dni:dni,nombre:nombre,email:email}:null;
+  }).filter(Boolean);
+}
+
+function showTab(t){
+  document.querySelectorAll('.tab').forEach(function(b,i){
+    b.classList.toggle('active',['bulk','single'][i]===t);
+  });
+  document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active')});
+  document.getElementById('panel-'+t).classList.add('active');
+}
+
+function generateAll(){
+  if(!libOk){showError('La librería QR no está lista. Recargá la página.');return;}
+  var list=parseList(document.getElementById('list-input').value);
+  if(!list.length){document.getElementById('status').textContent='No se encontraron invitados válidos.';return;}
+  var seen={},dups=[];
+  list.forEach(function(x){if(seen[x.dni])dups.push(x.dni);seen[x.dni]=1});
+  if(dups.length)showError('DNI repetidos en la lista: '+dups.join(', ')+'. Cada DNI debe aparecer una sola vez.');
+  var grid=document.getElementById('grid');
+  var dlBtn=document.getElementById('dl-btn');
+  grid.innerHTML=''; dlBtn.style.display='none'; generated=[]; document.getElementById('send-btn').style.display='none';
+  document.getElementById('status').textContent='Generando '+list.length+' QRs...';
+  var i=0;
+  function next(){
+    if(i>=list.length){
+      document.getElementById('status').textContent=list.length+' QRs listos para descargar.';
+      dlBtn.style.display='block'; document.getElementById('send-btn').style.display=generated.some(function(x){return x.email})?'block':'none'; return;
+    }
+    var item=list[i];
+    try{
+      var cv=buildFinalCanvas(item.dni, item.nombre);
+      var card=document.createElement('div'); card.className='qr-card';
+      var preview=document.createElement('canvas'); preview.width=120; preview.height=120;
+      preview.getContext('2d').drawImage(cv,QX,QY,QS,QS,0,0,120,120);
+      var nameEl=document.createElement('div'); nameEl.className='qr-name'; nameEl.textContent=item.nombre;
+      var dniEl=document.createElement('div'); dniEl.className='qr-dni'; dniEl.textContent='DNI '+item.dni;
+      var dlEl=document.createElement('button'); dlEl.className='qr-dl'; dlEl.textContent='Descargar';
+      (function(c,d,n){dlEl.onclick=function(){triggerDownload(c,d,n)};})(cv,item.dni,item.nombre);
+      var mailEl=document.createElement('div'); mailEl.className=item.email?'qr-mail':'qr-nomail'; mailEl.textContent=item.email||'sin email';
+      var stEl=document.createElement('div'); stEl.className='qr-sent';
+      var sbEl=document.createElement('button'); sbEl.className='qr-dl'; sbEl.textContent='Enviar email'; if(!item.email) sbEl.style.display='none';
+      card.append(preview,nameEl,dniEl,mailEl,stEl,dlEl,sbEl);
+      grid.appendChild(card);
+      var gg={dni:item.dni,nombre:item.nombre,email:item.email,cv:cv,stEl:stEl};
+      sbEl.onclick=function(){sendOne(gg)};
+      generated.push(gg); refreshSent(gg);
+    }catch(e){
+      showError('Error generando QR para DNI '+item.dni+': '+e.message);
+    }
+    document.getElementById('status').textContent=(i+1)+' / '+list.length+' generados...';
+    i++; setTimeout(next,10);
+  }
+  next();
+}
+
+function triggerDownload(cv,dni,nombre){
+  var a=document.createElement('a');
+  a.href=cv.toDataURL('image/png');
+  a.download=dni+'_'+nombre.replace(/\s+/g,'-')+'.png';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function canvasToBytes(cv){
+  var b64=cv.toDataURL('image/png').split(',')[1];
+  var bin=atob(b64);
+  var arr=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return arr;
+}
+
+function downloadZip(){
+  var btn=document.getElementById('dl-btn');
+  btn.disabled=true; btn.textContent='Empaquetando...';
+  try{
+    var parts=[];
+    var centralDir=[];
+    var offset=0;
+
+    function u16(n){return[n&0xFF,(n>>8)&0xFF]}
+    function u32(n){return[n&0xFF,(n>>8)&0xFF,(n>>16)&0xFF,(n>>24)&0xFF]}
+    function crc32(buf){
+      var c=0xFFFFFFFF,t=new Array(256);
+      for(var i=0;i<256;i++){var n=i;for(var j=0;j<8;j++)n=n&1?(0xEDB88320^(n>>>1)):(n>>>1);t[i]=n}
+      for(var i=0;i<buf.length;i++)c=t[(c^buf[i])&0xFF]^(c>>>8);
+      return(c^0xFFFFFFFF)>>>0;
+    }
+
+    for(var k=0;k<generated.length;k++){
+      var g=generated[k];
+      var data=canvasToBytes(g.cv);
+      var fname=g.dni+'_'+g.nombre.replace(/\s+/g,'-')+'.png';
+      var fnameBytes=[];
+      for(var j=0;j<fname.length;j++) fnameBytes.push(fname.charCodeAt(j));
+      var crc=crc32(data);
+
+      var lh=[0x50,0x4B,0x03,0x04,0x14,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00]
+        .concat(u32(crc)).concat(u32(data.length)).concat(u32(data.length))
+        .concat(u16(fnameBytes.length)).concat([0x00,0x00]).concat(fnameBytes);
+
+      var cd=[0x50,0x4B,0x01,0x02,0x14,0x00,0x14,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00]
+        .concat(u32(crc)).concat(u32(data.length)).concat(u32(data.length))
+        .concat(u16(fnameBytes.length)).concat([0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00])
+        .concat(u32(offset)).concat(fnameBytes);
+
+      parts.push(new Uint8Array(lh));
+      parts.push(data);
+      centralDir.push(new Uint8Array(cd));
+      offset+=lh.length+data.length;
+    }
+
+    var cdFlat=[].concat.apply([],centralDir.map(function(a){return Array.from(a)}));
+    var eocd=[0x50,0x4B,0x05,0x06,0x00,0x00,0x00,0x00]
+      .concat(u16(generated.length)).concat(u16(generated.length))
+      .concat(u32(cdFlat.length)).concat(u32(offset))
+      .concat([0x00,0x00]);
+
+    var allParts=parts.concat([new Uint8Array(cdFlat),new Uint8Array(eocd)]);
+    var total=allParts.reduce(function(s,a){return s+a.length},0);
+    var result=new Uint8Array(total);
+    var pos=0;
+    allParts.forEach(function(a){result.set(a,pos);pos+=a.length});
+
+    var blob=new Blob([result],{type:'application/zip'});
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='QR-invitados-fiesta.zip';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }catch(e){
+    showError('Error al generar ZIP: '+e.message);
+  }
+  btn.disabled=false; btn.textContent='Descargar todos como PNG (ZIP)';
+}
+
+function loadDemo(){
+  document.getElementById('list-input').value=
+    '33703031, Carla Alderete\n32456789, Ana García\n28901234, Carlos López\n35678012, María Rodríguez\n30123456, Juan Pérez';
+  generateAll();
+}
+
+function generateSingle(){
+  if(!libOk){showError('La librería QR no está lista. Recargá la página.');return;}
+  var nombre=document.getElementById('s-name').value.trim();
+  var dni=document.getElementById('s-dni').value.trim().replace(/\D/g,'');
+  var email=document.getElementById('s-email').value.trim().toLowerCase();
+  if(!nombre||!dni) return;
+  try{
+    var cv=buildFinalCanvas(dni,nombre);
+    window._sc={cv:cv,dni:dni,nombre:nombre,email:email,stEl:document.getElementById('single-status')};
+    var preview=document.getElementById('single-canvas');
+    preview.width=220; preview.height=260;
+    preview.getContext('2d').drawImage(cv,0,0,W,H,0,0,220,260);
+    document.getElementById('single-name-lbl').textContent=nombre;
+    document.getElementById('single-dni-lbl').textContent='DNI '+dni;
+    document.getElementById('single-preview').style.display='flex';
+    document.getElementById('single-send').style.display=email?'block':'none';
+    refreshSent(window._sc);
+  }catch(e){
+    showError('Error: '+e.message);
+  }
+}
+
+// ── Envío por email ─────────────────────────────────────────────────────────
+var SENT_KEY='qr_enviados', CFG_FIELDS=['mail-url','mail-key','mail-subject','mail-msg'];
+function sentGet(){try{return JSON.parse(localStorage.getItem(SENT_KEY)||'{}')}catch(e){return {}}}
+function sentMark(dni,email){var s=sentGet();s[dni]=email;try{localStorage.setItem(SENT_KEY,JSON.stringify(s))}catch(e){}}
+function refreshSent(g){g.stEl.textContent=(g.email&&sentGet()[g.dni]===g.email)?'✓ enviado':''}
+function saveCfg(){CFG_FIELDS.forEach(function(id){try{localStorage.setItem('cfg_'+id,document.getElementById(id).value)}catch(e){}})}
+window.addEventListener('load',function(){CFG_FIELDS.forEach(function(id){try{var v=localStorage.getItem('cfg_'+id);if(v!==null)document.getElementById(id).value=v}catch(e){}})});
+
+function sendMail(g){
+  var url=document.getElementById('mail-url').value.trim(), key=document.getElementById('mail-key').value;
+  if(!url||!key){document.getElementById('mail-cfg').open=true;return Promise.reject(new Error('completá la URL y la clave en "Envío por email"'))}
+  var body=JSON.stringify({clave:key,email:g.email,nombre:g.nombre,dni:g.dni,
+    asunto:document.getElementById('mail-subject').value,mensaje:document.getElementById('mail-msg').value,
+    png:g.cv.toDataURL('image/png').split(',')[1]});
+  return fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:body})
+    .then(function(r){return r.json()},function(){throw new Error('sin conexión o URL incorrecta')})
+    .then(function(j){if(!j.ok)throw new Error(j.error||'error desconocido');sentMark(g.dni,g.email);return j});
+}
+
+function sendOne(g){
+  if(!g||!g.email)return;
+  g.stEl.textContent='Enviando...';
+  sendMail(g).then(function(j){refreshSent(g);g.stEl.textContent+=' · quedan '+j.restante+' hoy'})
+    .catch(function(e){g.stEl.textContent='No se envió: '+e.message});
+}
+
+function sendAll(){
+  var st=document.getElementById('send-status'), btn=document.getElementById('send-btn'), s=sentGet();
+  var cola=generated.filter(function(x){return x.email&&s[x.dni]!==x.email});
+  if(!cola.length){st.textContent='No hay envíos pendientes.';return}
+  btn.disabled=true; var ok=0,i=0;
+  (function next(){
+    if(i>=cola.length){st.textContent='Listo: '+ok+' emails enviados.';btn.disabled=false;return}
+    var x=cola[i++];
+    st.textContent='Enviando '+i+' de '+cola.length+' ('+x.nombre+')...';
+    sendMail(x).then(function(j){
+      ok++;refreshSent(x);
+      if(j.restante<=0){st.textContent='Se enviaron '+ok+'. Llegaste al límite diario de Google: seguí mañana con los que falten (la app recuerda quiénes ya recibieron).';btn.disabled=false;return}
+      setTimeout(next,400);
+    }).catch(function(e){st.textContent='Se enviaron '+ok+' y se frenó en '+x.nombre+': '+e.message+'. Tocá el botón de nuevo para continuar.';btn.disabled=false});
+  })();
+}
+
+function downloadSingle(){
+  var s=window._sc; if(!s) return;
+  triggerDownload(s.cv,s.dni,s.nombre);
+}
+</script>
+</body>
+</html>
