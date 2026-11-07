@@ -356,6 +356,9 @@ window.showTab = function(t) {
   if (t==='lista') renderList('');
 };
 
+window.processDNI = processDNI;
+window.renderList = renderList;
+
 // ── Listener Firebase en tiempo real ────────────────────────────────────────
 // Funciona online Y offline gracias a enableIndexedDbPersistence
 onSnapshot(collection(db, 'invitados'), snap => {
