@@ -41,6 +41,12 @@ details label{margin-top:10px}
 .qr-nomail{font-size:11px;color:#c62828}
 .qr-sent{font-size:11px;color:#2e7d32;font-weight:600;text-align:center}
 #send-status{font-size:13px;color:#666;margin:8px 0;min-height:18px;line-height:1.5}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:1rem}
+.stat{background:#fff;border:1px solid #eee;border-radius:10px;padding:12px;text-align:center}
+.stat-n{font-size:24px;font-weight:600}.stat-l{font-size:11px;color:#888;margin-top:2px}
+button.danger{color:#c62828;border-color:#f5c2c7}
+.col{display:flex;flex-direction:column;gap:8px}
+#adm-status{font-size:13px;color:#666;margin-top:10px;min-height:18px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -58,9 +64,12 @@ details label{margin-top:10px}
     <label>Mensaje (opcional)</label>
     <textarea id="mail-msg" oninput="saveCfg()" style="height:70px;font-family:inherit;font-size:13px" placeholder="Ej: Sábado 26/9, 21 hs. Salón ..."></textarea>
   </details>
+  <label style="display:flex;gap:8px;align-items:center;color:#111;margin-bottom:6px"><input type="checkbox" id="save-db" checked style="width:auto;margin:0"> Guardar DNI y nombre en la app de control al generar</label>
+  <div id="save-status" style="font-size:13px;color:#2e7d32;margin-bottom:1rem;min-height:16px"></div>
   <div class="tabs">
     <button class="tab active" onclick="showTab('bulk')">Lista completa</button>
     <button class="tab" onclick="showTab('single')">QR individual</button>
+    <button class="tab" onclick="showTab('config')">Configurar</button>
   </div>
 
   <div id="panel-bulk" class="panel active">
@@ -75,6 +84,24 @@ details label{margin-top:10px}
     <button id="dl-btn" class="primary" onclick="downloadZip()">Descargar todos como PNG (ZIP)</button>
     <button id="send-btn" class="primary" onclick="sendAll()" style="display:none;width:100%;margin-top:8px">Enviar por email los pendientes</button>
     <div id="send-status"></div>
+  </div>
+
+  <div id="panel-config" class="panel">
+    <div class="info-box">Acá se administra la lista que usa la app de control en la puerta. Los cambios se ven al instante en los celulares.</div>
+    <div class="stats">
+      <div class="stat"><div class="stat-n" id="adm-total">—</div><div class="stat-l">Invitados</div></div>
+      <div class="stat"><div class="stat-n" id="adm-in" style="color:#2e7d32">—</div><div class="stat-l">Ingresaron</div></div>
+      <div class="stat"><div class="stat-n" id="adm-pct">—</div><div class="stat-l">Asistencia</div></div>
+    </div>
+    <label>Se sube la lista que pegaste en «Lista completa». Los emails no se suben.</label>
+    <div class="col">
+      <button class="primary" onclick="uploadList()">Subir lista a la app de control</button>
+      <label style="margin:0"><input type="checkbox" id="adm-reset"> Reiniciar también a quienes ya ingresaron</label>
+      <button onclick="exportCSV()">Exportar asistencia (.csv)</button>
+      <button class="danger" onclick="resetIngress()">Reiniciar ingresos</button>
+      <button class="danger" onclick="clearAll()">Borrar toda la lista</button>
+    </div>
+    <div id="adm-status"></div>
   </div>
 
   <div id="panel-single" class="panel">
@@ -165,19 +192,20 @@ function parseList(txt){
 
 function showTab(t){
   document.querySelectorAll('.tab').forEach(function(b,i){
-    b.classList.toggle('active',['bulk','single'][i]===t);
+    b.classList.toggle('active',['bulk','single','config'][i]===t);
   });
   document.querySelectorAll('.panel').forEach(function(p){p.classList.remove('active')});
   document.getElementById('panel-'+t).classList.add('active');
 }
 
-function generateAll(){
+function generateAll(noSave){
   if(!libOk){showError('La librería QR no está lista. Recargá la página.');return;}
   var list=parseList(document.getElementById('list-input').value);
   if(!list.length){document.getElementById('status').textContent='No se encontraron invitados válidos.';return;}
   var seen={},dups=[];
   list.forEach(function(x){if(seen[x.dni])dups.push(x.dni);seen[x.dni]=1});
   if(dups.length)showError('DNI repetidos en la lista: '+dups.join(', ')+'. Cada DNI debe aparecer una sola vez.');
+  if(!noSave&&!dups.length)autoSave(list);
   var grid=document.getElementById('grid');
   var dlBtn=document.getElementById('dl-btn');
   grid.innerHTML=''; dlBtn.style.display='none'; generated=[]; document.getElementById('send-btn').style.display='none';
@@ -296,7 +324,7 @@ function downloadZip(){
 function loadDemo(){
   document.getElementById('list-input').value=
     '33703031, Carla Alderete\n32456789, Ana García\n28901234, Carlos López\n35678012, María Rodríguez\n30123456, Juan Pérez';
-  generateAll();
+  generateAll(true);
 }
 
 function generateSingle(){
@@ -305,6 +333,7 @@ function generateSingle(){
   var dni=document.getElementById('s-dni').value.trim().replace(/\D/g,'');
   var email=document.getElementById('s-email').value.trim().toLowerCase();
   if(!nombre||!dni) return;
+  autoSave([{dni:dni,nombre:nombre,email:email}]);
   try{
     var cv=buildFinalCanvas(dni,nombre);
     window._sc={cv:cv,dni:dni,nombre:nombre,email:email,stEl:document.getElementById('single-status')};
@@ -364,10 +393,98 @@ function sendAll(){
   })();
 }
 
+function autoSave(list){
+  var box=document.getElementById('save-db'), st=document.getElementById('save-status');
+  if(!box||!box.checked){st.textContent='';return}
+  if(!window.saveGuests){st.textContent='No se pudo conectar con la base: no se guardó.';st.style.color='#c62828';return}
+  st.style.color='#2e7d32'; st.textContent='Guardando en la app de control...';
+  window.saveGuests(list,false).then(function(r){st.textContent='✓ '+r.ok+' guardados en la app de control'+(r.err?' ('+r.err+' con error)':'')})
+    .catch(function(e){st.style.color='#c62828';st.textContent='No se guardó: '+e.message});
+}
+
 function downloadSingle(){
   var s=window._sc; if(!s) return;
   triggerDownload(s.cv,s.dni,s.nombre);
 }
+</script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, doc, setDoc, updateDoc, deleteDoc, collection, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const db = getFirestore(initializeApp({
+  apiKey: "AIzaSyATCLBf37_oPpSpcpD2L2vwElmiEMc3R3E",
+  authDomain: "reverence-project.firebaseapp.com",
+  projectId: "reverence-project",
+  storageBucket: "reverence-project.firebasestorage.app",
+  messagingSenderId: "949135364513",
+  appId: "1:949135364513:web:920baf3301689811e7fbe0"
+}));
+const $ = id => document.getElementById(id);
+const msg = t => { $('adm-status').textContent = t; };
+let snap = {}, listo = false;
+
+onSnapshot(collection(db, 'invitados'), s => {
+  snap = {}; s.forEach(d => { snap[d.id] = d.data(); });
+  const all = Object.values(snap), inn = all.filter(x => x.ingreso).length;
+  $('adm-total').textContent = all.length;
+  $('adm-in').textContent = inn;
+  $('adm-pct').textContent = all.length ? Math.round(inn / all.length * 100) + '%' : '—';
+  listo = true;
+}, () => msg('No se pudo leer la base. Revisá la conexión.'));
+
+async function esperarBase() {
+  for (let i = 0; i < 25 && !listo; i++) await new Promise(r => setTimeout(r, 200));
+  if (!listo) throw new Error('no se pudo leer la base, revisá la conexión');
+}
+
+// Guarda solo DNI y nombre (el email nunca se sube). Si el invitado ya existe, conserva su ingreso.
+window.saveGuests = async function (list, reiniciar) {
+  await esperarBase();
+  let ok = 0, err = 0;
+  for (const x of list) {
+    try {
+      const ref = doc(db, 'invitados', x.dni);
+      if (snap[x.dni] && !reiniciar) await setDoc(ref, { nombre: x.nombre }, { merge: true });
+      else await setDoc(ref, { nombre: x.nombre, ingreso: false, hora: '' });
+      ok++;
+    } catch (e) { err++; }
+  }
+  return { ok, err };
+};
+
+window.uploadList = async function () {
+  const list = parseList($('list-input').value);
+  if (!list.length) { msg('Pegá primero la lista en la pestaña «Lista completa».'); return; }
+  msg('Subiendo...');
+  try {
+    const r = await window.saveGuests(list, $('adm-reset').checked);
+    msg(r.ok + ' invitados subidos.' + (r.err ? ' ' + r.err + ' con error.' : ''));
+  } catch (e) { msg('No se subió: ' + e.message); }
+};
+
+window.exportCSV = function () {
+  const rows = ['DNI,Nombre,Ingresó,Hora'];
+  Object.entries(snap).forEach(([dni, x]) => rows.push(`${dni},"${String(x.nombre).replace(/"/g, '""')}",${x.ingreso ? 'SI' : 'NO'},${x.hora || ''}`));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.join('\n')], { type: 'text/csv' }));
+  a.download = 'asistencia-fiesta.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+};
+
+window.resetIngress = async function () {
+  if (!confirm('¿Reiniciar los ingresos de todos los invitados? La lista se mantiene.')) return;
+  msg('Reiniciando...');
+  for (const dni of Object.keys(snap)) { try { await updateDoc(doc(db, 'invitados', dni), { ingreso: false, hora: '' }); } catch (e) {} }
+  msg('Ingresos reiniciados.');
+};
+
+window.clearAll = async function () {
+  if (prompt('Esto borra a TODOS los invitados de la app de control. Escribí BORRAR para confirmar.') !== 'BORRAR') { msg('No se borró nada.'); return; }
+  msg('Borrando...');
+  const s = await getDocs(collection(db, 'invitados'));
+  for (const d of s.docs) await deleteDoc(d.ref);
+  msg('Lista borrada.');
+};
 </script>
 </body>
 </html>

@@ -87,7 +87,7 @@ textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;fo
   <div class="tabs">
     <button class="tab active" onclick="showTab('scan')">Escanear</button>
     <button class="tab" onclick="showTab('lista')">Invitados</button>
-    <button class="tab" onclick="showTab('config')">Configurar</button>
+    
   </div>
 
   <div id="panel-scan" class="panel active">
@@ -135,38 +135,10 @@ textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;fo
   <div id="panel-lista" class="panel">
     <input type="text" id="search" placeholder="Buscar por nombre o DNI..." oninput="renderList(this.value)">
     <div id="guest-list"><div class="empty">Sin invitados cargados</div></div>
+    <button onclick="forcSync()" style="width:100%;margin-top:1rem">Sincronizar ahora</button>
   </div>
 
-  <div id="panel-config" class="panel">
-    <div class="info-card">
-      <strong>Cómo funciona:</strong><br>
-      Con internet → sincroniza en tiempo real entre todos los celulares.<br>
-      Sin internet → guarda localmente y sincroniza solo cuando vuelve la señal.<br>
-      Funciona en iPhone y Android, sin instalar nada.
-    </div>
-
-    <div class="section-lbl">Cargar lista de invitados</div>
-    <div class="info-card">Formato: <code>DNI, Nombre Apellido</code> — una por línea. Si la lista trae un email al final, se ignora: los emails no se guardan en la base.</div>
-    <textarea id="import-txt" placeholder="33703031, Carla Alderete&#10;32456789, Ana García&#10;28901234, Carlos López"></textarea>
-    <div style="display:flex;gap:8px">
-      <button class="primary" onclick="importGuests()" style="flex:1">Guardar y subir</button>
-      <button onclick="loadDemo()" style="flex:1">Demo</button>
-    </div>
-    <div id="import-status"></div>
-
-    <div style="margin-top:1.5rem;display:flex;flex-direction:column;gap:8px">
-      <button onclick="forcSync()">Sincronizar ahora</button>
-      <button onclick="exportCSV()">Exportar asistencia (.csv)</button>
-      <button class="danger" onclick="resetIngress()">Reiniciar ingresos</button>
-      <button class="danger" onclick="clearAll()">Borrar toda la lista</button>
-    </div>
-
-    <div class="info-card" style="margin-top:1.5rem">
-      <strong>Para el policía:</strong><br>
-      Compartile esta URL por WhatsApp. La abre en el navegador de su celular (iPhone o Android) y listo — no necesita instalar nada.
-    </div>
   </div>
-</div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <script type="module">
@@ -329,58 +301,6 @@ async function processDNI(raw) {
     addPending(dni, hora);
   }
 }
-
-// ── Importar lista ───────────────────────────────────────────────────────────
-window.importGuests = async function() {
-  const txt = document.getElementById('import-txt').value.trim();
-  if (!txt) return;
-  const lines = txt.split('\n').filter(l => l.trim());
-  let ok=0, errors=0;
-  document.getElementById('import-status').textContent = 'Guardando...';
-  for (const line of lines) {
-    const parts = line.split(',').map(p => p.trim());
-    if (parts.length >= 3 && parts[parts.length-1].includes('@')) parts.pop(); // el email no se sube a la base
-    if (parts.length < 2) { errors++; continue; }
-    const dni = parts[0].trim().replace(/\D/g,'');
-    const nombre = parts.slice(1).join(', ');
-    if (!dni || !nombre) { errors++; continue; }
-    try {
-      await setDoc(doc(db, 'invitados', dni), { nombre, ingreso: false, hora: '' });
-      ok++;
-    } catch(e) { errors++; }
-  }
-  document.getElementById('import-status').textContent = ok+' invitados guardados.'+(errors?' '+errors+' con error.':'');
-};
-
-window.loadDemo = function() {
-  document.getElementById('import-txt').value =
-    '33703031, Carla Alderete\n32456789, Ana García\n28901234, Carlos López\n35678012, María Rodríguez\n30123456, Juan Pérez\n27890345, Laura Martínez\n33567890, Diego Sánchez\n31234567, Sofía Torres';
-  window.importGuests();
-};
-
-window.resetIngress = async function() {
-  if (!confirm('¿Reiniciar todos los ingresos?')) return;
-  for (const dni of Object.keys(guests)) {
-    try { await updateDoc(doc(db, 'invitados', dni), { ingreso: false, hora: '' }); } catch(e) {}
-  }
-  clearPending();
-};
-
-window.clearAll = async function() {
-  if (!confirm('¿Borrar toda la lista?')) return;
-  const snap = await getDocs(collection(db, 'invitados'));
-  for (const d of snap.docs) await deleteDoc(d.ref);
-  clearPending();
-};
-
-window.exportCSV = function() {
-  const rows = ['DNI,Nombre,Ingresó,Hora'];
-  Object.entries(guests).forEach(([dni,g]) => rows.push(`${dni},"${String(g.nombre).replace(/"/g,'""')}",${g.ingreso?'SI':'NO'},${g.hora||''}`));
-  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = 'asistencia-fiesta.csv';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-};
 
 // ── Cámara ───────────────────────────────────────────────────────────────────
 window.toggleCam = async function() {
