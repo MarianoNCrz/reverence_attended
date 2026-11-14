@@ -141,35 +141,20 @@ textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;fo
   </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-<script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, doc, setDoc, collection, onSnapshot, updateDoc, getDocs, deleteDoc, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-
-const firebaseConfig = {
-  apiKey: "AIzaSyATCLBf37_oPpSpcpD2L2vwElmiEMc3R3E",
-  authDomain: "reverence-project.firebaseapp.com",
-  projectId: "reverence-project",
-  storageBucket: "reverence-project.firebasestorage.app",
-  messagingSenderId: "949135364513",
-  appId: "1:949135364513:web:920baf3301689811e7fbe0"
-};
-
-const fbApp = initializeApp(firebaseConfig);
-const db = getFirestore(fbApp);
-
-// Habilitar persistencia offline — clave para funcionar sin internet
-try {
-  await enableIndexedDbPersistence(db);
-} catch(e) {
-  // Si ya está habilitado en otra pestaña, no importa
-}
-
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script>
+const cfg = window.SB_CONFIG || {};
+const sb = (window.supabase && cfg.url && cfg.key && !/TU-PROYECTO|TU-CLAVE/.test(cfg.url + cfg.key))
+  ? window.supabase.createClient(cfg.url, cfg.key) : null;
+const CACHE_KEY = 'sb_guests', PENDING_KEY = 'fiesta_pending';
 let guests = {};
+try { guests = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); } catch (e) { guests = {}; }
 let scanning = false, stream = null, scanLoop = null;
 let lastDNI = '', lastScanTime = 0;
 let isOnline = navigator.onLine;
 const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-const PENDING_KEY = 'fiesta_pending';
+function saveCache() { try { localStorage.setItem(CACHE_KEY, JSON.stringify(guests)); } catch (e) {} }
 
 // ── Estado de red ────────────────────────────────────────────────────────────
 function updateNetStatus(online, syncing) {
@@ -205,30 +190,6 @@ function clearPending() {
   localStorage.removeItem(PENDING_KEY);
   document.getElementById('pending-banner').style.display = 'none';
 }
-
-async function syncPending() {
-  const p = getPending();
-  if (!p.length) return;
-  updateNetStatus(true, true);
-  const fallidos = [];
-  for (const item of p) {
-    try {
-      await updateDoc(doc(db, 'invitados', item.dni), { ingreso: true, hora: item.hora });
-    } catch(e) { fallidos.push(item); }
-  }
-  if (fallidos.length) localStorage.setItem(PENDING_KEY, JSON.stringify(fallidos));
-  else clearPending();
-  updateNetStatus(true, false);
-}
-
-window.forcSync = async function() {
-  if (!navigator.onLine) {
-    alert('Sin conexión. Intentá cuando tengas señal.');
-    return;
-  }
-  await syncPending();
-  alert('Sincronización completada.');
-};
 
 // ── Stats y lista ────────────────────────────────────────────────────────────
 function updateStats() {
@@ -278,28 +239,87 @@ function showResult(name, msg, type) {
   r._t = setTimeout(() => r.style.display='none', 4500);
 }
 
+
+// ── Datos (Supabase) ─────────────────────────────────────────────────────────
+function refrescar() { updateStats(); renderList(document.getElementById('search').value || ''); }
+
+function aplicarPendientes() {
+  getPending().forEach(p => { const g = guests[p.dni]; if (g && !g.ingreso) { g.ingreso = true; g.hora = p.hora; } });
+}
+
+async function cargar() {
+  if (!sb || !navigator.onLine) return;
+  const r = await sb.from('invitados').select('dni,nombre,ingreso,hora');
+  if (r.error) { updateNetStatus(false, false); return; }
+  guests = {};
+  r.data.forEach(x => { guests[x.dni] = { nombre: x.nombre, ingreso: x.ingreso, hora: x.hora }; });
+  aplicarPendientes(); saveCache(); refrescar(); updateNetStatus(true, false);
+}
+
+// Marca en la base SOLO si todavía no había ingresado (lo garantiza la base, aunque escaneen dos celulares a la vez).
+function marcarEnBase(dni, hora) {
+  return sb.from('invitados').update({ ingreso: true, hora }).eq('dni', dni).eq('ingreso', false).select('dni')
+    .then(r => r, () => ({ error: true }));
+}
+
+async function syncPending() {
+  const p = getPending();
+  if (!p.length || !sb || !navigator.onLine) return;
+  updateNetStatus(true, true);
+  const fallidos = [];
+  for (const it of p) { const r = await marcarEnBase(it.dni, it.hora); if (r.error) fallidos.push(it); }
+  if (fallidos.length) localStorage.setItem(PENDING_KEY, JSON.stringify(fallidos)); else clearPending();
+  document.getElementById('pending-banner').style.display = fallidos.length ? 'block' : 'none';
+  updateNetStatus(navigator.onLine, false);
+  refrescar();
+}
+
+window.forcSync = async function () {
+  if (!navigator.onLine) { alert('Sin conexión. Intentá cuando tengas señal.'); return; }
+  await syncPending(); await cargar();
+  alert('Sincronización completada.');
+};
+
+let canal = null;
+function escuchar() {
+  if (!sb) return;
+  const anterior = canal, mio = sb.channel('puerta-' + Date.now());
+  canal = mio;
+  if (anterior) sb.removeChannel(anterior);
+  mio.on('postgres_changes', { event: '*', schema: 'public', table: 'invitados' }, p => {
+    if (p.eventType === 'DELETE') delete guests[p.old.dni];
+    else guests[p.new.dni] = { nombre: p.new.nombre, ingreso: p.new.ingreso, hora: p.new.hora };
+    aplicarPendientes(); saveCache(); refrescar();
+  }).subscribe(estado => {
+    if (canal !== mio) return;
+    if (estado === 'SUBSCRIBED') { cargar().then(syncPending); }
+    else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(estado)) {
+      updateNetStatus(false, false);
+      setTimeout(escuchar, 5000); // reconecta (sin usuario con sesión, Supabase corta cada 24 h)
+    }
+  });
+}
+
 // ── Proceso principal ────────────────────────────────────────────────────────
+function marcarLocal(g, hora) { g.ingreso = true; if (hora) g.hora = hora; saveCache(); refrescar(); }
+
 async function processDNI(raw) {
-  const dni = String(raw).trim().replace(/\D/g,'');
+  const dni = String(raw).trim().replace(/\D/g, '');
   if (!dni) return;
   document.getElementById('dni-input').value = '';
-  if (!guests[dni]) { showResult('DNI no encontrado', 'El DNI '+dni+' no está en la lista.', 'err'); return; }
   const g = guests[dni];
+  if (!g) { showResult('DNI no encontrado', 'El DNI ' + dni + ' no está en la lista.', 'err'); return; }
   if (g.ingreso) { showResult(g.nombre, 'Este QR ya fue utilizado — acceso denegado.', 'warn'); return; }
-
-  const hora = new Date().toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
-  g.ingreso = true;
-  g.hora = hora;
-  updateStats();
-  renderList(document.getElementById('search').value || '');
-  showResult(g.nombre, 'Acceso permitido · '+hora, 'ok');
-
-  // Intentar subir a Firebase — si falla, guardar pendiente
-  try {
-    await updateDoc(doc(db, 'invitados', dni), { ingreso: true, hora });
-  } catch(e) {
-    addPending(dni, hora);
+  const hora = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  if (sb && navigator.onLine) {
+    const r = await marcarEnBase(dni, hora);
+    if (!r.error) {
+      if (!r.data.length) { marcarLocal(g); showResult(g.nombre, 'Este QR ya fue utilizado en otro celular — acceso denegado.', 'warn'); return; }
+      marcarLocal(g, hora); showResult(g.nombre, 'Acceso permitido · ' + hora, 'ok'); return;
+    }
   }
+  marcarLocal(g, hora); addPending(dni, hora);
+  showResult(g.nombre, 'Acceso permitido · ' + hora + ' (se sincroniza al volver la señal)', 'ok');
 }
 
 // ── Cámara ───────────────────────────────────────────────────────────────────
@@ -356,28 +376,19 @@ window.showTab = function(t) {
   if (t==='lista') renderList('');
 };
 
+
 window.processDNI = processDNI;
 window.renderList = renderList;
 
-// ── Listener Firebase en tiempo real ────────────────────────────────────────
-// Funciona online Y offline gracias a enableIndexedDbPersistence
-onSnapshot(collection(db, 'invitados'), snap => {
-  guests = {};
-  snap.forEach(d => { guests[d.id] = d.data(); });
-  updateStats();
-  renderList(document.getElementById('search')?.value || '');
-  if (navigator.onLine) updateNetStatus(true, false);
-  // Chequear si quedan pendientes
-  if (getPending().length) document.getElementById('pending-banner').style.display = 'block';
-}, err => {
-  updateNetStatus(false, false);
-});
-
-// Chequear pendientes al iniciar
-if (getPending().length) {
-  document.getElementById('pending-banner').style.display = 'block';
-  if (navigator.onLine) syncPending();
-}
+// ── Inicio ───────────────────────────────────────────────────────────────────
+if (!sb) { document.getElementById('net-lbl').textContent = 'Falta configurar Supabase'; document.getElementById('net-dot').className = 'dot offline'; }
+refrescar();
+if (getPending().length) document.getElementById('pending-banner').style.display = 'block';
+cargar().then(syncPending);
+escuchar();
+setInterval(cargar, 30000);
+setInterval(syncPending, 20000);
+window.addEventListener('online', () => { escuchar(); });
 </script>
 </body>
 </html>

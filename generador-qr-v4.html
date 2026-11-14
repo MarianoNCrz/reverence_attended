@@ -87,6 +87,13 @@ button.danger{color:#c62828;border-color:#f5c2c7}
   </div>
 
   <div id="panel-config" class="panel">
+    <div id="auth-in" style="margin-bottom:1rem">
+      <label>Para guardar o borrar invitados, iniciá sesión</label>
+      <input type="text" id="auth-email" placeholder="email" inputmode="email" autocomplete="username">
+      <input type="password" id="auth-pass" placeholder="contraseña" autocomplete="current-password">
+      <button class="primary" onclick="login()" style="width:100%">Iniciar sesión</button>
+    </div>
+    <div id="auth-out" style="display:none;margin-bottom:1rem;font-size:13px">Sesión iniciada como <b id="auth-user"></b> <button onclick="logout()" style="margin-left:8px">Cerrar sesión</button></div>
     <div class="info-box">Acá se administra la lista que usa la app de control en la puerta. Los cambios se ven al instante en los celulares.</div>
     <div class="stats">
       <div class="stat"><div class="stat-n" id="adm-total">—</div><div class="stat-l">Invitados</div></div>
@@ -407,84 +414,94 @@ function downloadSingle(){
   triggerDownload(s.cv,s.dni,s.nombre);
 }
 </script>
-<script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, doc, setDoc, updateDoc, deleteDoc, collection, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-
-const db = getFirestore(initializeApp({
-  apiKey: "AIzaSyATCLBf37_oPpSpcpD2L2vwElmiEMc3R3E",
-  authDomain: "reverence-project.firebaseapp.com",
-  projectId: "reverence-project",
-  storageBucket: "reverence-project.firebasestorage.app",
-  messagingSenderId: "949135364513",
-  appId: "1:949135364513:web:920baf3301689811e7fbe0"
-}));
-const $ = id => document.getElementById(id);
-const msg = t => { $('adm-status').textContent = t; };
-let snap = {}, listo = false;
-
-onSnapshot(collection(db, 'invitados'), s => {
-  snap = {}; s.forEach(d => { snap[d.id] = d.data(); });
-  const all = Object.values(snap), inn = all.filter(x => x.ingreso).length;
-  $('adm-total').textContent = all.length;
-  $('adm-in').textContent = inn;
-  $('adm-pct').textContent = all.length ? Math.round(inn / all.length * 100) + '%' : '—';
-  listo = true;
-}, () => msg('No se pudo leer la base. Revisá la conexión.'));
-
-async function esperarBase() {
-  for (let i = 0; i < 25 && !listo; i++) await new Promise(r => setTimeout(r, 200));
-  if (!listo) throw new Error('no se pudo leer la base, revisá la conexión');
-}
-
-// Guarda solo DNI y nombre (el email nunca se sube). Si el invitado ya existe, conserva su ingreso.
-window.saveGuests = async function (list, reiniciar) {
-  await esperarBase();
-  let ok = 0, err = 0;
-  for (const x of list) {
-    try {
-      const ref = doc(db, 'invitados', x.dni);
-      if (snap[x.dni] && !reiniciar) await setDoc(ref, { nombre: x.nombre }, { merge: true });
-      else await setDoc(ref, { nombre: x.nombre, ingreso: false, hora: '' });
-      ok++;
-    } catch (e) { err++; }
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script>
+(function () {
+  const cfg = window.SB_CONFIG || {};
+  const $ = id => document.getElementById(id);
+  const msg = t => { $('adm-status').textContent = t; };
+  if (!window.supabase || !cfg.url || !cfg.key || /TU-PROYECTO|TU-CLAVE/.test(cfg.url + cfg.key)) {
+    window.addEventListener('load', () => msg('Falta completar supabase-config.js con la URL y la clave de tu proyecto.'));
+    return;
   }
-  return { ok, err };
-};
+  const sb = window.supabase.createClient(cfg.url, cfg.key);
+  let snap = {}, sesion = null;
 
-window.uploadList = async function () {
-  const list = parseList($('list-input').value);
-  if (!list.length) { msg('Pegá primero la lista en la pestaña «Lista completa».'); return; }
-  msg('Subiendo...');
-  try {
-    const r = await window.saveGuests(list, $('adm-reset').checked);
-    msg(r.ok + ' invitados subidos.' + (r.err ? ' ' + r.err + ' con error.' : ''));
-  } catch (e) { msg('No se subió: ' + e.message); }
-};
+  function pintar() {
+    const all = Object.values(snap), inn = all.filter(x => x.ingreso).length;
+    $('adm-total').textContent = all.length;
+    $('adm-in').textContent = inn;
+    $('adm-pct').textContent = all.length ? Math.round(inn / all.length * 100) + '%' : '—';
+  }
+  function pintarSesion() {
+    $('auth-in').style.display = sesion ? 'none' : 'block';
+    $('auth-out').style.display = sesion ? 'block' : 'none';
+    if (sesion) $('auth-user').textContent = sesion.user.email;
+  }
+  async function cargar() {
+    const r = await sb.from('invitados').select('*');
+    if (r.error) { msg('No se pudo leer la base: ' + r.error.message); return; }
+    snap = {}; r.data.forEach(x => { snap[x.dni] = x; }); pintar();
+  }
 
-window.exportCSV = function () {
-  const rows = ['DNI,Nombre,Ingresó,Hora'];
-  Object.entries(snap).forEach(([dni, x]) => rows.push(`${dni},"${String(x.nombre).replace(/"/g, '""')}",${x.ingreso ? 'SI' : 'NO'},${x.hora || ''}`));
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.join('\n')], { type: 'text/csv' }));
-  a.download = 'asistencia-fiesta.csv';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-};
+  sb.auth.getSession().then(r => { sesion = r.data.session; pintarSesion(); });
+  sb.auth.onAuthStateChange((_e, s) => { sesion = s; pintarSesion(); });
+  cargar();
+  sb.channel('admin').on('postgres_changes', { event: '*', schema: 'public', table: 'invitados' }, p => {
+    if (p.eventType === 'DELETE') delete snap[p.old.dni]; else snap[p.new.dni] = p.new;
+    pintar();
+  }).subscribe(estado => { if (estado === 'SUBSCRIBED') cargar(); });
+  setInterval(cargar, 30000);
 
-window.resetIngress = async function () {
-  if (!confirm('¿Reiniciar los ingresos de todos los invitados? La lista se mantiene.')) return;
-  msg('Reiniciando...');
-  for (const dni of Object.keys(snap)) { try { await updateDoc(doc(db, 'invitados', dni), { ingreso: false, hora: '' }); } catch (e) {} }
-  msg('Ingresos reiniciados.');
-};
+  window.login = async function () {
+    const r = await sb.auth.signInWithPassword({ email: $('auth-email').value.trim(), password: $('auth-pass').value });
+    if (r.error) msg('No se pudo iniciar sesión: ' + r.error.message);
+    else { msg('Sesión iniciada.'); $('auth-pass').value = ''; }
+  };
+  window.logout = function () { sb.auth.signOut(); };
 
-window.clearAll = async function () {
-  if (prompt('Esto borra a TODOS los invitados de la app de control. Escribí BORRAR para confirmar.') !== 'BORRAR') { msg('No se borró nada.'); return; }
-  msg('Borrando...');
-  const s = await getDocs(collection(db, 'invitados'));
-  for (const d of s.docs) await deleteDoc(d.ref);
-  msg('Lista borrada.');
-};
+  // Guarda solo DNI y nombre (el email nunca se sube). Si ya existe, conserva su ingreso.
+  window.saveGuests = async function (list, reiniciar) {
+    if (!sesion) throw new Error('iniciá sesión en la pestaña Configurar');
+    const m = {}; list.forEach(x => { m[x.dni] = x; });
+    const rows = Object.values(m).map(x => reiniciar ? { dni: x.dni, nombre: x.nombre, ingreso: false, hora: '' } : { dni: x.dni, nombre: x.nombre });
+    const r = await sb.from('invitados').upsert(rows, { onConflict: 'dni' });
+    if (r.error) throw new Error(r.error.message);
+    return { ok: rows.length, err: 0 };
+  };
+
+  window.uploadList = async function () {
+    const list = parseList($('list-input').value);
+    if (!list.length) { msg('Pegá primero la lista en la pestaña «Lista completa».'); return; }
+    msg('Subiendo...');
+    try { const r = await window.saveGuests(list, $('adm-reset').checked); msg(r.ok + ' invitados subidos.'); }
+    catch (e) { msg('No se subió: ' + e.message); }
+  };
+
+  window.exportCSV = function () {
+    const rows = ['DNI,Nombre,Ingresó,Hora'];
+    Object.entries(snap).forEach(([dni, x]) => rows.push(`${dni},"${String(x.nombre).replace(/"/g, '""')}",${x.ingreso ? 'SI' : 'NO'},${x.hora || ''}`));
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.join('\n')], { type: 'text/csv' }));
+    a.download = 'asistencia-fiesta.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+
+  window.resetIngress = async function () {
+    if (!sesion) { msg('Iniciá sesión para reiniciar ingresos.'); return; }
+    if (!confirm('¿Reiniciar los ingresos de todos los invitados? La lista se mantiene.')) return;
+    const r = await sb.from('invitados').update({ ingreso: false, hora: '' }).neq('dni', '');
+    msg(r.error ? 'No se pudo: ' + r.error.message : 'Ingresos reiniciados.');
+  };
+
+  window.clearAll = async function () {
+    if (!sesion) { msg('Iniciá sesión para borrar la lista.'); return; }
+    if (prompt('Esto borra a TODOS los invitados de la app de control. Escribí BORRAR para confirmar.') !== 'BORRAR') { msg('No se borró nada.'); return; }
+    const r = await sb.from('invitados').delete().neq('dni', '');
+    msg(r.error ? 'No se pudo: ' + r.error.message : 'Lista borrada.');
+  };
+})();
 </script>
 </body>
 </html>
